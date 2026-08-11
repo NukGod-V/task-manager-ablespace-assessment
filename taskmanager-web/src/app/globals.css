@@ -1,0 +1,108 @@
+@import "tailwindcss";
+
+@theme inline {
+  --color-background: rgb(var(--background));
+  --color-foreground: rgb(var(--foreground));
+
+  --color-sidebar: rgb(var(--sidebar));
+  --color-sidebar-active: rgb(var(--sidebar-active));
+
+  --color-card: rgb(var(--card));
+  --color-border: rgb(var(--border));
+
+  --color-secondary: rgb(var(--secondary-foreground));
+  --color-muted: rgb(var(--muted-foreground));
+
+  --color-cta-primary: rgb(var(--cta-primary-bg));
+  --color-cta-primary-foreground: rgb(var(--cta-primary-text));
+
+  --color-accent: rgb(var(--accent));
+
+  --color-priority-urgent: rgb(var(--priority-urgent));
+  --color-priority-high: rgb(var(--priority-high));
+  --color-priority-medium: rgb(var(--priority-medium));
+  --color-priority-low: rgb(var(--priority-low));
+  --color-priority-none: rgb(var(--priority-none));
+
+  --color-date-overdue: rgb(var(--date-overdue-text));
+  --color-date-overdue-bg: rgb(var(--date-overdue-bg));
+
+  --color-chip-bg: rgb(var(--chip-bg));
+  --color-chip-text: rgb(var(--chip-text));
+
+  --color-destructive: rgb(var(--destructive));
+  --color-destructive-bg: rgb(var(--destructive-bg));
+
+  --radius-pill: 9999px;
+}
+
+:root {
+  /* ---- Base surface & text tokens (figma-extraction §1.1, Light) ---- */
+  --background: 255 255 255;        /* base/background #FFFFFF */
+  --foreground: 17 24 39;           /* text/primary #111827 */
+
+  --sidebar: 249 250 251;           /* surface/sidebar #F9FAFB */
+  --sidebar-active: 243 244 246;    /* surface/sidebar-active #F3F4F6 */
+
+  --card: 255 255 255;              /* surface/card #FFFFFF */
+  --border: 229 231 235;            /* border/default #E5E7EB */
+
+  --secondary-foreground: 75 85 99; /* text/secondary #4B5563 */
+  --muted-foreground: 156 163 175;  /* text/muted #9CA3AF */
+
+  --cta-primary-bg: 10 10 10;       /* cta/primary-bg #0A0A0A */
+  --cta-primary-text: 255 255 255;
+
+  --priority-urgent: 239 68 68;
+  --priority-high: 249 115 22;
+  --priority-medium: 245 158 11;
+  --priority-low: 156 163 175;
+  --priority-none: 209 213 219;
+
+  --status-backlog-dot: 245 158 11;
+  --date-overdue-text: 220 38 38;
+  --date-overdue-bg: 254 226 226;
+
+  --chip-bg: 243 244 246;
+  --chip-text: 55 65 81;
+  --destructive: 220 38 38;
+  --destructive-bg: 254 226 226;
+
+  /* Default accent — Figma shows "Blue" checked/active by default */
+  --accent: 124 58 237;
+}
+
+/* Dark equivalents — not present in Figma extraction (Light-only screenshots) */
+.dark {
+  --background: 10 10 10;
+  --foreground: 243 244 246;
+
+  --sidebar: 17 24 39;
+  --sidebar-active: 31 41 55;
+
+  --card: 17 24 39;
+  --border: 39 39 42;
+
+  --secondary-foreground: 156 163 175;
+  --muted-foreground: 113 113 122;
+
+  --cta-primary-bg: 255 255 255;
+  --cta-primary-text: 10 10 10;
+
+  --chip-bg: 31 41 55;
+  --chip-text: 209 213 219;
+  --destructive-bg: 69 10 10;
+}
+
+/* Color Mode presets (figma-extraction §2.9) — independent of light/dark */
+[data-color-mode='amber']   { --accent: 245 158 11; }
+[data-color-mode='blue']    { --accent: 124 58 237; }
+[data-color-mode='pink']    { --accent: 236 72 153; }
+[data-color-mode='rose']    { --accent: 244 63 94; }
+[data-color-mode='emerald'] { --accent: 16 185 129; }
+[data-color-mode='black']   { --accent: 17 24 39; }
+
+body {
+  background-color: rgb(var(--background));
+  color: rgb(var(--foreground));
+}
