@@ -16,9 +16,12 @@ import { JwtStrategy } from './strategies/jwt.strategy';
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
-        secret: config.get<string>('JWT_SECRET'),
-        signOptions: { expiresIn: config.get<string>('JWT_EXPIRES_IN') },
-      }),
+      secret: config.get<string>('JWT_SECRET'),
+      signOptions: {
+        // Cast as 'any' to bypass the strict StringValue literal type check
+        expiresIn: config.get<string>('JWT_EXPIRES_IN') as any
+      },
+    }),
     }),
   ],
   controllers: [AuthController],
