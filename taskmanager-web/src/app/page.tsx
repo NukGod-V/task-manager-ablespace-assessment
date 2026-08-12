@@ -1,8 +1,8 @@
 import { redirect } from 'next/navigation';
 
-// Root just redirects to the real entry point. Once auth state persistence
-// is in place, this is also where we'd check for an existing session and
-// skip straight to /tasks instead of always showing Login.
+// Root just redirects to the real entry point for now. Once session
+// persistence exists, this is also where we'd check for an existing
+// token and skip straight to /tasks instead of always showing Login.
 export default function RootPage() {
   redirect('/login');
 }

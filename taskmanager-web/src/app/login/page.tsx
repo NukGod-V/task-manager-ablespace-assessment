@@ -17,10 +17,10 @@ export default function LoginPage() {
     setError(null);
     try {
       const { accessToken } = await guestLogin();
-      // Client-side storage for now — fine for a guest-only flow.
-      // Swap for an httpOnly cookie once Google OAuth needs proper session handling.
+      // localStorage is fine for a guest-only flow; swap for an httpOnly
+      // cookie once Google OAuth needs real session/refresh handling.
       window.localStorage.setItem('accessToken', accessToken);
-      router.push('/tasks'); // next screen we build — this route doesn't exist yet
+      router.push('/tasks'); // next screen to build — route doesn't exist yet
     } catch {
       setError('Could not start a guest session. Is the API running on :4000?');
       setLoading(false);
@@ -29,14 +29,14 @@ export default function LoginPage() {
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-background px-4">
-      {/* Logo row — 1200 Fill x 24 Hug per Figma, centered in the frame */}
-      <div className="mb-8 flex items-center gap-2">
+      {/* Logo row: 1200px Fill x 24px Hug, centered — confirmed via Figma annotation */}
+      <div className="mb-8 flex h-6 w-full max-w-[1200px] items-center justify-center gap-2">
         <PyramidLogo className="h-6 w-6" />
         <span className="text-sm font-semibold text-foreground">Pyramid</span>
       </div>
 
-      {/* Auth card — 384px wide, height hugs content, per Figma */}
-      <div className="w-[384px] rounded-2xl border border-border bg-card p-8">
+      {/* Auth card: 384px wide, 12px radius, 32px padding — per spec */}
+      <div className="w-[384px] rounded-xl border border-border bg-card p-8">
         <div className="text-center">
           <h1 className="text-2xl font-bold text-foreground">
             Let&apos;s get back on track
@@ -47,6 +47,7 @@ export default function LoginPage() {
         </div>
 
         <div className="mt-6 flex flex-col gap-3">
+          {/* Primary CTA — full pill radius, near-black regardless of accent */}
           <button
             onClick={handleGuestLogin}
             disabled={loading}
@@ -55,9 +56,9 @@ export default function LoginPage() {
             {loading ? 'Starting session…' : 'Continue as Guest'}
           </button>
 
-          {/* Google OAuth isn't built on the backend yet (Phase 1 = Guest
-              only) — kept visible per the design, but genuinely disabled
-              rather than wired to a fake handler. */}
+          {/* Secondary — visually disabled: Google OAuth isn't built on the
+              backend yet (Phase 1 shipped Guest auth only). Genuinely
+              disabled rather than wired to a fake handler. */}
           <button
             disabled
             title="Coming soon"
@@ -73,7 +74,7 @@ export default function LoginPage() {
         )}
       </div>
 
-      {/* Footer legal text — 384 x 48 Hug per Figma */}
+      {/* Footer legal block: 384px x 48px Hug — confirmed via Figma annotation */}
       <p className="mt-6 w-[384px] text-center text-xs text-muted">
         By clicking continue, you agree to our{' '}
         <Link href="/terms" className="underline">Terms of Service</Link>{' '}
