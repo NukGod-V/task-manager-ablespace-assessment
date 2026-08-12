@@ -2,6 +2,7 @@ export interface AuthUser {
   id: string;
   username: string;
   authProvider: string;
+  email?: string; // only populated once Google OAuth exists; guests have none
 }
 
 const TOKEN_KEY = 'accessToken';
