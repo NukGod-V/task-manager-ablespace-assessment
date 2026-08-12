@@ -1,6 +1,6 @@
-// Approximated from the screenshot — a black rounded-square badge with a
-// simple white mark. Swap the inner path for the real exported SVG if you
-// have one from Figma; this is a close visual stand-in, not a pixel trace.
+// SVG approximation of the black rounded-square badge from the screenshot.
+// Swap the inner <path> for Figma's actual exported SVG if you have one —
+// this is a close visual stand-in, not a pixel-traced export.
 export function PyramidLogo(props: React.SVGProps<SVGSVGElement>) {
   return (
     <svg viewBox="0 0 24 24" fill="none" {...props}>
