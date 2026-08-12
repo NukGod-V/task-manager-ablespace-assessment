@@ -6,26 +6,25 @@ import Link from 'next/link';
 import { PyramidLogo } from '@/components/icons/pyramid-logo';
 import { GoogleIcon } from '@/components/icons/google-icon';
 import { guestLogin } from '@/lib/api';
+import { setSession } from '@/lib/auth';
 
 export default function LoginPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function handleGuestLogin() {
-    setLoading(true);
-    setError(null);
-    try {
-      const { accessToken } = await guestLogin();
-      // localStorage is fine for a guest-only flow; swap for an httpOnly
-      // cookie once Google OAuth needs real session/refresh handling.
-      window.localStorage.setItem('accessToken', accessToken);
-      router.push('/tasks'); // next screen to build — route doesn't exist yet
-    } catch {
-      setError('Could not start a guest session. Is the API running on :4000?');
-      setLoading(false);
-    }
+async function handleGuestLogin() {
+  setLoading(true);
+  setError(null);
+  try {
+    const { accessToken, user } = await guestLogin();
+    setSession(accessToken, user); // was: window.localStorage.setItem('accessToken', accessToken)
+    router.push('/tasks');
+  } catch {
+    setError('Could not start a guest session. Is the API running on :4000?');
+    setLoading(false);
   }
+}
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-background px-4">
