@@ -9,6 +9,7 @@
 
   --color-card: rgb(var(--card));
   --color-border: rgb(var(--border));
+  --color-column-header: rgb(var(--column-header) / <alpha-value>);
 
   --color-secondary: rgb(var(--secondary-foreground));
   --color-muted: rgb(var(--muted-foreground));
@@ -70,6 +71,8 @@
 
   /* Default accent — Figma shows "Blue" checked/active by default */
   --accent: 124 58 237;
+
+  --column-header: 249 250 251; /* #F9FAFB, per figma-extraction §1.1 */
 }
 
 /* Dark equivalents — not present in Figma extraction (Light-only screenshots) */
@@ -92,6 +95,9 @@
   --chip-bg: 31 41 55;
   --chip-text: 209 213 219;
   --destructive-bg: 69 10 10;
+
+  /* inside .dark — inferred, not Figma-confirmed (same caveat as your other dark values) */
+  --column-header: 24 24 27;
 }
 
 /* Color Mode presets (figma-extraction §2.9) — independent of light/dark */
