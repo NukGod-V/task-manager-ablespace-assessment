@@ -1,3 +1,4 @@
+/* @noinspection CssUnknownProperty */
 @import "tailwindcss";
 
 @theme inline {
@@ -9,7 +10,6 @@
 
   --color-card: rgb(var(--card));
   --color-border: rgb(var(--border));
-  --color-column-header: rgb(var(--column-header) / <alpha-value>);
 
   --color-secondary: rgb(var(--secondary-foreground));
   --color-muted: rgb(var(--muted-foreground));
@@ -33,6 +33,8 @@
 
   --color-destructive: rgb(var(--destructive));
   --color-destructive-bg: rgb(var(--destructive-bg));
+
+  --color-column-header: rgb(var(--column-header));
 
   --radius-pill: 9999px;
 }
