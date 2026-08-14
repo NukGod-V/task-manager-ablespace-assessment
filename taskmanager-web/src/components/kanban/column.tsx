@@ -20,9 +20,11 @@ export function Column({ column, tasks, onOpenTask }: ColumnProps) {
     data: { type: 'column' },
   });
 
+  // Distinct id (was column.id — the actual bug). data.status lets task
+  // drag handlers resolve the target column without parsing strings.
   const { setNodeRef: setDropRef } = useDroppable({
-    id: column.id,
-    data: { type: 'column-drop-area' },
+    id: `${column.id}-dropzone`,
+    data: { type: 'column-drop-area', status: column.id },
   });
 
   const style = { transform: CSS.Transform.toString(transform), transition };
@@ -32,9 +34,6 @@ export function Column({ column, tasks, onOpenTask }: ColumnProps) {
       ref={setNodeRef}
       style={style}
       className={cn(
-        // h-fit + max-h-full: column hugs its content and rounds off after
-        // the last card, but still caps at the board's height and scrolls
-        // internally if it has more cards than fit — was h-full before.
         'flex h-fit max-h-full w-[288px] shrink-0 flex-col rounded-xl bg-column-header',
         isDragging && 'opacity-50',
       )}
@@ -50,16 +49,10 @@ export function Column({ column, tasks, onOpenTask }: ColumnProps) {
         </button>
         <h3 className="flex-1 text-sm font-semibold text-foreground">{column.title}</h3>
         <span className="text-xs text-muted">{tasks.length}</span>
-        <button
-          className="rounded p-1 text-muted hover:bg-sidebar-active hover:text-foreground"
-          aria-label={`Add task to ${column.title}`}
-        >
+        <button className="rounded p-1 text-muted hover:bg-sidebar-active hover:text-foreground" aria-label={`Add task to ${column.title}`}>
           <Plus size={14} />
         </button>
-        <button
-          className="rounded p-1 text-muted hover:bg-sidebar-active hover:text-foreground"
-          aria-label="Column menu"
-        >
+        <button className="rounded p-1 text-muted hover:bg-sidebar-active hover:text-foreground" aria-label="Column menu">
           <MoreHorizontal size={14} />
         </button>
       </div>
@@ -67,7 +60,7 @@ export function Column({ column, tasks, onOpenTask }: ColumnProps) {
       <div ref={setDropRef} className="flex flex-col gap-2 overflow-y-auto px-2 pb-2">
         <SortableContext items={tasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
           {tasks.map((task) => (
-            <TaskCard key={task.id} task={task} onOpen={() => onOpenTask(task.id)} />
+            <TaskCard key={task.id} task={task} onEdit={() => onOpenTask(task.id)} />
           ))}
         </SortableContext>
 
