@@ -18,15 +18,13 @@ function getPageMeta(pathname: string) {
   return { title: 'Tasks', breadcrumb: ['Tasks'], viewKey: 'tasks' };
 }
 
-// --- Fields popover: List/Board toggle lives INSIDE it, per §2.4 -----------
+// --- Fields popover: List/Board toggle lives INSIDE it, per §2.4 ----------
 
 function FieldsPopover({ viewKey, onClose }: { viewKey: string; onClose: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
   useClickOutside(ref, onClose);
   const [viewMode, setViewMode] = useViewMode(viewKey);
 
-  // Defaults differ per view mode — matches §2.5's "Board fields ≠ List
-  // fields" note (image 1's List defaults: Priority/Members/Due Date on).
   const defaults =
     viewMode === 'list'
       ? { Priority: true, Members: true, 'Due Date': true, Labels: false, Status: false, Reporter: false }
@@ -77,7 +75,7 @@ function FieldsPopover({ viewKey, onClose }: { viewKey: string; onClose: () => v
   );
 }
 
-// --- Filter popover: nested category → value flyout, per image 3 ----------
+// --- Filter popover: nested category -> value flyout ----------------------
 
 const FILTER_CATEGORIES = [
   { key: 'status', label: 'Status', icon: CircleDot, values: ['Backlog', 'To Do', 'Doing', 'Completed', 'On Hold'] },
@@ -122,8 +120,6 @@ function FilterPopover({ onClose }: { onClose: () => void }) {
             </button>
 
             {active && (
-              // Opens to the LEFT since Filter sits near the top-right edge
-              // (unlike Account Menu's flyout, which opens right).
               <div className="absolute right-full top-0 z-50 mr-1 w-48 rounded-xl border border-border bg-card p-1.5 shadow-lg">
                 {cat.values.map((val) => {
                   const selected = selections[cat.key]?.includes(val);
@@ -147,7 +143,7 @@ function FilterPopover({ onClose }: { onClose: () => void }) {
   );
 }
 
-// --- Add Task placeholder — kept minimal, no Figma source for this screen --
+// --- Add Task modal ---------------------------------------------------
 
 const STATUS_OPTIONS: { value: TaskStatus; label: string }[] = [
   { value: 'todo', label: 'To Do' },
@@ -164,10 +160,13 @@ const PRIORITY_OPTIONS: { value: TaskPriority; label: string }[] = [
   { value: 'low', label: 'Low' },
 ];
 
-function AddTaskModal({ onClose }: { onClose: () => void }) {
+// defaultStatus is now an actual parameter of this function — this is the
+// fix for the ReferenceError. It was used on line 171 before but never
+// declared here.
+function AddTaskModal({ onClose, defaultStatus }: { onClose: () => void; defaultStatus?: TaskStatus }) {
   const { createTaskHandler } = useTaskActions();
   const [title, setTitle] = useState('');
-  const [status, setStatus] = useState<TaskStatus>('todo');
+  const [status, setStatus] = useState<TaskStatus>(defaultStatus ?? 'todo');
   const [priority, setPriority] = useState<TaskPriority>('no_priority');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -178,7 +177,7 @@ function AddTaskModal({ onClose }: { onClose: () => void }) {
       return;
     }
     if (!createTaskHandler) {
-      setError('Task creation isn\u2019t available on this page yet.');
+      setError('Task creation isn\u2019t available right now — try reopening from the Tasks page.');
       return;
     }
     setSubmitting(true);
@@ -251,16 +250,30 @@ function AddTaskModal({ onClose }: { onClose: () => void }) {
   );
 }
 
+// --- Topbar --------------------------------------------------------------
+
 export function Topbar() {
   const pathname = usePathname();
   const { collapsed, toggle } = useSidebar();
   const { title, breadcrumb, viewKey } = getPageMeta(pathname);
+  const { openAddTaskModal, registerOpenAddTaskModal } = useTaskActions();
 
   const [searchOpen, setSearchOpen] = useState(false);
   const [fieldsOpen, setFieldsOpen] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const [addTaskOpen, setAddTaskOpen] = useState(false);
+  const [prefillStatus, setPrefillStatus] = useState<TaskStatus | undefined>(undefined);
   const searchRef = useRef<HTMLInputElement>(null);
+
+  // Lets Board's per-column "+" buttons trigger THIS modal with a status
+  // pre-selected, since Board has no direct access to Topbar's state.
+  useEffect(() => {
+    registerOpenAddTaskModal((status) => {
+      setPrefillStatus(status);
+      setAddTaskOpen(true);
+    });
+    return () => registerOpenAddTaskModal(null);
+  }, [registerOpenAddTaskModal]);
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -328,13 +341,24 @@ export function Topbar() {
           {filterOpen && <FilterPopover onClose={() => setFilterOpen(false)} />}
         </div>
 
-        <button onClick={() => setAddTaskOpen(true)} className="flex items-center gap-1 rounded-full bg-cta-primary px-4 py-1.5 text-sm font-medium text-cta-primary-foreground">
+        <button
+          onClick={() => {
+            setPrefillStatus(undefined); // generic Add Task — no column context
+            setAddTaskOpen(true);
+          }}
+          className="flex items-center gap-1 rounded-full bg-cta-primary px-4 py-1.5 text-sm font-medium text-cta-primary-foreground"
+        >
           <Plus size={14} />
           Add {title === 'Projects' ? 'Project' : 'Task'}
         </button>
       </header>
 
-      {addTaskOpen && <AddTaskModal onClose={() => setAddTaskOpen(false)} />}
+      {addTaskOpen && (
+        <AddTaskModal
+          onClose={() => setAddTaskOpen(false)}
+          defaultStatus={prefillStatus}
+        />
+      )}
     </>
   );
 }

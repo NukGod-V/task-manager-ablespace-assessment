@@ -12,9 +12,10 @@ interface ColumnProps {
   column: KanbanColumn;
   tasks: MockTask[];
   onOpenTask: (taskId: string) => void;
+  onAddTask: () => void; // NEW
 }
 
-export function Column({ column, tasks, onOpenTask }: ColumnProps) {
+export function Column({ column, tasks, onOpenTask, onAddTask }: ColumnProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: column.id,
     data: { type: 'column' },
@@ -49,7 +50,7 @@ export function Column({ column, tasks, onOpenTask }: ColumnProps) {
         </button>
         <h3 className="flex-1 text-sm font-semibold text-foreground">{column.title}</h3>
         <span className="text-xs text-muted">{tasks.length}</span>
-        <button className="rounded p-1 text-muted hover:bg-sidebar-active hover:text-foreground" aria-label={`Add task to ${column.title}`}>
+        <button onClick={onAddTask} className="rounded p-1 text-muted hover:bg-sidebar-active hover:text-foreground" aria-label={`Add task to ${column.title}`}>
           <Plus size={14} />
         </button>
         <button className="rounded p-1 text-muted hover:bg-sidebar-active hover:text-foreground" aria-label="Column menu">
@@ -64,7 +65,7 @@ export function Column({ column, tasks, onOpenTask }: ColumnProps) {
           ))}
         </SortableContext>
 
-        <button className="mt-1 flex items-center gap-1.5 rounded-lg px-2 py-2 text-left text-xs text-muted hover:bg-sidebar-active hover:text-foreground">
+        <button onClick={onAddTask} className="mt-1 flex items-center gap-1.5 rounded-lg px-2 py-2 text-left text-xs text-muted hover:bg-sidebar-active hover:text-foreground">
           <Plus size={14} />
           Add Task
         </button>
