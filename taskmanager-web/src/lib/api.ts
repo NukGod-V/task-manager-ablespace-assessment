@@ -1,17 +1,161 @@
+import { getAccessToken } from './auth';
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
+
+// --- Raw shapes returned by the NestJS API (owner/assignee are eager-loaded User objects) ---
+interface ApiUser {
+  id: string;
+  username: string;
+  authProvider: string;
+}
+
+interface ApiProject {
+  id: string;
+  name: string;
+  workspaceId: string | null;
+}
+
+interface ApiTask {
+  id: string;
+  title: string;
+  description: string | null;
+  status: string;
+  priority: string;
+  position: number;
+  dueDate: string | null;
+  owner: ApiUser;
+  assignee: ApiUser | null;
+  project: ApiProject | null;
+}
 
 interface GuestLoginResponse {
   accessToken: string;
   user: { id: string; username: string; authProvider: string };
 }
 
-// Thin fetch wrapper — kept in one place so every future endpoint
-// (Google OAuth, tasks, projects...) follows the same error-handling
-// pattern instead of scattering raw fetch() calls through components.
+async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const token = getAccessToken();
+  const res = await fetch(`${API_URL}${path}`, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(options.headers ?? {}),
+    },
+  });
+  if (!res.ok) {
+    throw new Error(`API ${options.method ?? 'GET'} ${path} failed: ${res.status}`);
+  }
+  if (res.status === 204) return undefined as T;
+  return res.json();
+}
+
+// --- Auth ---
+
 export async function guestLogin(): Promise<GuestLoginResponse> {
   const res = await fetch(`${API_URL}/auth/guest`, { method: 'POST' });
-  if (!res.ok) {
-    throw new Error(`Guest login failed: ${res.status}`);
-  }
+  if (!res.ok) throw new Error(`Guest login failed: ${res.status}`);
   return res.json();
+}
+
+// --- Task shape adapter -----------------------------------------------
+// Backend has no `role` field on User and no Label table yet, so those
+// parts of the UI's task shape are filled with honest placeholders rather
+// than fake-but-pretty values.
+import type { MockTask, TaskStatus, TaskPriority } from '@/types/task';
+
+function mapApiTaskToUi(task: ApiTask): MockTask {
+  return {
+    id: task.id,
+    title: task.title,
+    description: task.description,
+    status: task.status as TaskStatus,
+    priority: task.priority as TaskPriority,
+    position: task.position,
+    dueDate: task.dueDate,
+    projectId: task.project?.id ?? null,
+    assignee: task.assignee
+      ? {
+          name: task.assignee.username,
+          role: 'Member', // no role field exists on User yet — honest placeholder
+          initials: task.assignee.username[0]?.toUpperCase() ?? '?',
+        }
+      : null,
+    labels: [], // no Label/TaskLabel table yet — always empty until built
+  };
+}
+
+// --- Tasks ---
+
+export async function fetchTasks(): Promise<MockTask[]> {
+  const tasks = await apiFetch<ApiTask[]>('/tasks');
+  return tasks.map(mapApiTaskToUi);
+}
+
+export interface CreateTaskInput {
+  title: string;
+  status?: TaskStatus;
+  priority?: TaskPriority;
+  dueDate?: string;
+  projectId?: string;
+  assigneeId?: string;
+}
+
+export async function createTask(input: CreateTaskInput): Promise<MockTask> {
+  const task = await apiFetch<ApiTask>('/tasks', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+  return mapApiTaskToUi(task);
+}
+
+export interface UpdateTaskInput {
+  title?: string;
+  description?: string | null;
+  status?: TaskStatus;
+  priority?: TaskPriority;
+  dueDate?: string | null;
+  projectId?: string | null;
+  assigneeId?: string | null;
+}
+
+export async function updateTask(id: string, input: UpdateTaskInput): Promise<MockTask> {
+  const task = await apiFetch<ApiTask>(`/tasks/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(input),
+  });
+  return mapApiTaskToUi(task);
+}
+
+// Only persists the DRAGGED task's new status+position — see chat note on
+// why sibling reordering is visual-only until a batch-reorder endpoint exists.
+export async function reorderTask(
+  id: string,
+  input: { status: TaskStatus; position: number },
+): Promise<MockTask> {
+  const task = await apiFetch<ApiTask>(`/tasks/${id}/reorder`, {
+    method: 'PATCH',
+    body: JSON.stringify(input),
+  });
+  return mapApiTaskToUi(task);
+}
+
+// --- Projects ---
+
+export interface UiProject {
+  id: string;
+  name: string;
+}
+
+export async function fetchProjects(): Promise<UiProject[]> {
+  const projects = await apiFetch<ApiProject[]>('/projects');
+  return projects.map((p) => ({ id: p.id, name: p.name }));
+}
+
+export async function createProject(name: string): Promise<UiProject> {
+  const project = await apiFetch<ApiProject>('/projects', {
+    method: 'POST',
+    body: JSON.stringify({ name }),
+  });
+  return { id: project.id, name: project.name };
 }

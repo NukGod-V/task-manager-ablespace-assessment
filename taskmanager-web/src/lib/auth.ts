@@ -25,3 +25,8 @@ export function clearSession() {
   window.localStorage.removeItem(TOKEN_KEY);
   window.localStorage.removeItem(USER_KEY);
 }
+
+export function getAccessToken(): string | null {
+  if (typeof window === 'undefined') return null; // SSR guard
+  return window.localStorage.getItem(TOKEN_KEY);
+}

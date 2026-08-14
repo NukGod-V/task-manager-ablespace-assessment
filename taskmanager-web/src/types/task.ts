@@ -20,6 +20,7 @@ export interface MockTask {
   dueDate: string | null; // ISO date
   assignee: TaskAssignee | null;
   labels: string[];
+  projectId?: string | null;
 }
 
 export interface KanbanColumn {
