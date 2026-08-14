@@ -10,6 +10,8 @@ import { cn } from '@/lib/utils';
 import { useClickOutside } from '@/hooks/use-click-outside';
 import { useSidebar } from './sidebar-context';
 import { useViewMode } from './view-mode-context';
+import { useTaskActions } from './task-actions-context';
+import type { TaskStatus, TaskPriority } from '@/types/task';
 
 function getPageMeta(pathname: string) {
   if (pathname.startsWith('/projects')) return { title: 'Projects', breadcrumb: ['Projects'], viewKey: 'projects' };
@@ -147,7 +149,49 @@ function FilterPopover({ onClose }: { onClose: () => void }) {
 
 // --- Add Task placeholder — kept minimal, no Figma source for this screen --
 
+const STATUS_OPTIONS: { value: TaskStatus; label: string }[] = [
+  { value: 'todo', label: 'To Do' },
+  { value: 'doing', label: 'Doing' },
+  { value: 'completed', label: 'Completed' },
+  { value: 'on_hold', label: 'On Hold' },
+];
+
+const PRIORITY_OPTIONS: { value: TaskPriority; label: string }[] = [
+  { value: 'no_priority', label: 'No Priority' },
+  { value: 'urgent', label: 'Urgent' },
+  { value: 'high', label: 'High' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'low', label: 'Low' },
+];
+
 function AddTaskModal({ onClose }: { onClose: () => void }) {
+  const { createTaskHandler } = useTaskActions();
+  const [title, setTitle] = useState('');
+  const [status, setStatus] = useState<TaskStatus>('todo');
+  const [priority, setPriority] = useState<TaskPriority>('no_priority');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSubmit() {
+    if (!title.trim()) {
+      setError('Title is required.');
+      return;
+    }
+    if (!createTaskHandler) {
+      setError('Task creation isn\u2019t available on this page yet.');
+      return;
+    }
+    setSubmitting(true);
+    setError(null);
+    try {
+      await createTaskHandler({ title: title.trim(), status, priority });
+      onClose();
+    } catch {
+      setError('Could not create the task. Is the API running?');
+      setSubmitting(false);
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
       <div onClick={(e) => e.stopPropagation()} className="w-[420px] rounded-xl border border-border bg-card p-6 shadow-lg">
@@ -157,13 +201,50 @@ function AddTaskModal({ onClose }: { onClose: () => void }) {
             <X size={16} />
           </button>
         </div>
+
         <input
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
           placeholder="Task title..."
+          autoFocus
           className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted"
         />
+
+        <div className="mt-3 flex gap-2">
+          <select
+            value={status}
+            onChange={(e) => setStatus(e.target.value as TaskStatus)}
+            className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none"
+          >
+            {STATUS_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
+
+          <select
+            value={priority}
+            onChange={(e) => setPriority(e.target.value as TaskPriority)}
+            className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none"
+          >
+            {PRIORITY_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
+        </div>
+
+        {error && <p className="mt-3 text-xs text-destructive">{error}</p>}
+
         <div className="mt-4 flex justify-end gap-2">
-          <button onClick={onClose} className="rounded-full border border-border px-4 py-2 text-sm text-foreground hover:bg-sidebar-active">Cancel</button>
-          <button onClick={onClose} className="rounded-full bg-cta-primary px-4 py-2 text-sm text-cta-primary-foreground">Create</button>
+          <button onClick={onClose} className="rounded-full border border-border px-4 py-2 text-sm text-foreground hover:bg-sidebar-active">
+            Cancel
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={submitting}
+            className="rounded-full bg-cta-primary px-4 py-2 text-sm text-cta-primary-foreground disabled:opacity-60"
+          >
+            {submitting ? 'Creating…' : 'Create'}
+          </button>
         </div>
       </div>
     </div>
