@@ -2,51 +2,35 @@
 
 import { useMemo, useState } from 'react';
 import {
-  DndContext,
-  DragOverlay,
-  PointerSensor,
-  KeyboardSensor,
-  useSensor,
-  useSensors,
-  closestCenter,
-  type CollisionDetection,
-  type DragStartEvent,
-  type DragOverEvent,
-  type DragEndEvent,
+  DndContext, DragOverlay, PointerSensor, KeyboardSensor, useSensor, useSensors,
+  closestCenter, type CollisionDetection, type DragStartEvent, type DragOverEvent, type DragEndEvent,
 } from '@dnd-kit/core';
-import {
-  SortableContext,
-  horizontalListSortingStrategy,
-  sortableKeyboardCoordinates,
-  arrayMove,
-} from '@dnd-kit/sortable';
+import { SortableContext, horizontalListSortingStrategy, sortableKeyboardCoordinates, arrayMove } from '@dnd-kit/sortable';
 import { Column } from './column';
 import { TaskCard } from './task-card';
-import { TaskDetail } from './task-detail';
-import { INITIAL_COLUMNS, INITIAL_TASKS } from '@/lib/mock-data';
 import type { KanbanColumn, MockTask, TaskStatus } from '@/types/task';
 
-// Restrict candidates by drag type BEFORE scoring distance. Columns only
-// ever collide with other columns; tasks only ever collide with other
-// tasks or a column's drop-zone. This is what actually fixes the bug —
-// previously the drop-zone shared an id with its own column, silently
-// breaking type filtering (see chat note).
 const collisionDetectionStrategy: CollisionDetection = (args) => {
   const activeType = args.active.data.current?.type;
   const allowedTypes = activeType === 'column' ? ['column'] : ['task', 'column-drop-area'];
-  const filtered = args.droppableContainers.filter((c) =>
-    allowedTypes.includes(c.data.current?.type as string),
-  );
+  const filtered = args.droppableContainers.filter((c) => allowedTypes.includes(c.data.current?.type as string));
   return closestCenter({ ...args, droppableContainers: filtered });
 };
 
-export function Board() {
-  const [columns, setColumns] = useState<KanbanColumn[]>(INITIAL_COLUMNS);
-  const [tasks, setTasks] = useState<MockTask[]>(INITIAL_TASKS);
+export interface BoardProps {
+  columns: KanbanColumn[];
+  tasks: MockTask[];
+  setColumns: React.Dispatch<React.SetStateAction<KanbanColumn[]>>;
+  setTasks: React.Dispatch<React.SetStateAction<MockTask[]>>;
+  onOpenTask: (taskId: string) => void;
+}
 
+// State now lives at the page level (tasks/page.tsx) instead of here, so
+// TaskListView can share the exact same tasks/columns — required for
+// List/Board toggle to show consistent data, not two separate copies.
+export function Board({ columns, tasks, setColumns, setTasks, onOpenTask }: BoardProps) {
   const [activeType, setActiveType] = useState<'column' | 'task' | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -56,17 +40,13 @@ export function Board() {
   const tasksByColumn = useMemo(() => {
     const map = new Map<TaskStatus, MockTask[]>();
     for (const col of columns) {
-      map.set(
-        col.id,
-        tasks.filter((t) => t.status === col.id).sort((a, b) => a.position - b.position),
-      );
+      map.set(col.id, tasks.filter((t) => t.status === col.id).sort((a, b) => a.position - b.position));
     }
     return map;
   }, [columns, tasks]);
 
   const activeTask = activeType === 'task' ? tasks.find((t) => t.id === activeId) : undefined;
   const activeColumn = activeType === 'column' ? columns.find((c) => c.id === activeId) : undefined;
-  const selectedTask = selectedTaskId ? tasks.find((t) => t.id === selectedTaskId) ?? null : null;
 
   function handleDragStart(event: DragStartEvent) {
     setActiveType((event.active.data.current?.type as 'column' | 'task') ?? null);
@@ -76,20 +56,14 @@ export function Board() {
   function handleDragOver(event: DragOverEvent) {
     const { active, over } = event;
     if (!over || active.data.current?.type !== 'task') return;
-
-    // Both task cards and column drop-zones carry a `status` field in their
-    // sortable/droppable data — read it directly instead of re-deriving it
-    // from `over.id`, which is unreliable once ids aren't 1:1 with status.
     const overStatus = over.data.current?.status as TaskStatus | undefined;
     if (!overStatus) return;
-
-    const activeId = active.id as string;
-    if (activeId === over.id) return;
-
+    const activeIdStr = active.id as string;
+    if (activeIdStr === over.id) return;
     setTasks((prev) => {
-      const activeTask = prev.find((t) => t.id === activeId);
+      const activeTask = prev.find((t) => t.id === activeIdStr);
       if (!activeTask || activeTask.status === overStatus) return prev;
-      return prev.map((t) => (t.id === activeId ? { ...t, status: overStatus } : t));
+      return prev.map((t) => (t.id === activeIdStr ? { ...t, status: overStatus } : t));
     });
   }
 
@@ -100,8 +74,6 @@ export function Board() {
     if (!over) return;
 
     if (active.data.current?.type === 'column') {
-      // over.id is now guaranteed to be a real column id — the filtered
-      // collision strategy above only offers column-type droppables here.
       if (active.id === over.id) return;
       setColumns((prev) => {
         const oldIndex = prev.findIndex((c) => c.id === active.id);
@@ -116,11 +88,8 @@ export function Board() {
       setTasks((prev) => {
         const activeTask = prev.find((t) => t.id === active.id);
         if (!activeTask) return prev;
-
         const overData = over.data.current;
         const targetStatus = (overData?.status as TaskStatus | undefined) ?? activeTask.status;
-        // Only treat `over` as a specific card position if it's actually a
-        // task; if it's the column drop-zone, we place at the end instead.
         const overTaskId = overData?.type === 'task' ? (over.id as string) : null;
 
         const columnIds = prev
@@ -139,62 +108,38 @@ export function Board() {
         const positions = new Map(reordered.map((id, idx) => [id, idx * 1000]));
 
         return prev.map((t) => {
-          if (t.id === active.id) {
-            return { ...t, status: targetStatus, position: positions.get(t.id) ?? t.position };
-          }
-          if (positions.has(t.id)) {
-            return { ...t, position: positions.get(t.id)! };
-          }
+          if (t.id === active.id) return { ...t, status: targetStatus, position: positions.get(t.id) ?? t.position };
+          if (positions.has(t.id)) return { ...t, position: positions.get(t.id)! };
           return t;
         });
       });
     }
   }
 
-  function handleSaveTask(updated: MockTask) {
-    setTasks((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
-  }
-
   return (
-    <>
-      <DndContext
-        sensors={sensors}
-        collisionDetection={collisionDetectionStrategy}
-        onDragStart={handleDragStart}
-        onDragOver={handleDragOver}
-        onDragEnd={handleDragEnd}
-      >
-        <div className="flex h-full gap-5 overflow-x-auto pb-2">
-          <SortableContext items={columns.map((c) => c.id)} strategy={horizontalListSortingStrategy}>
-            {columns.map((column) => (
-              <Column
-                key={column.id}
-                column={column}
-                tasks={tasksByColumn.get(column.id) ?? []}
-                onOpenTask={setSelectedTaskId}
-              />
-            ))}
-          </SortableContext>
-        </div>
+    <DndContext
+      sensors={sensors}
+      collisionDetection={collisionDetectionStrategy}
+      onDragStart={handleDragStart}
+      onDragOver={handleDragOver}
+      onDragEnd={handleDragEnd}
+    >
+      <div className="flex h-full gap-5 overflow-x-auto pb-2">
+        <SortableContext items={columns.map((c) => c.id)} strategy={horizontalListSortingStrategy}>
+          {columns.map((column) => (
+            <Column key={column.id} column={column} tasks={tasksByColumn.get(column.id) ?? []} onOpenTask={onOpenTask} />
+          ))}
+        </SortableContext>
+      </div>
 
-        <DragOverlay>
-          {activeTask && <TaskCard task={activeTask} onEdit={() => {}} />}
-          {activeColumn && (
-            <div className="w-[288px] rounded-xl bg-column-header px-3 py-3 text-sm font-semibold text-foreground shadow-lg">
-              {activeColumn.title}
-            </div>
-          )}
-        </DragOverlay>
-      </DndContext>
-
-      {selectedTask && (
-        <TaskDetail
-          key={selectedTask.id}
-          task={selectedTask}
-          onClose={() => setSelectedTaskId(null)}
-          onSave={handleSaveTask}
-        />
-      )}
-    </>
+      <DragOverlay>
+        {activeTask && <TaskCard task={activeTask} onEdit={() => {}} />}
+        {activeColumn && (
+          <div className="w-[288px] rounded-xl bg-column-header px-3 py-3 text-sm font-semibold text-foreground shadow-lg">
+            {activeColumn.title}
+          </div>
+        )}
+      </DragOverlay>
+    </DndContext>
   );
 }
