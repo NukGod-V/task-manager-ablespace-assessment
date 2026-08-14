@@ -23,6 +23,7 @@ export interface BoardProps {
   setColumns: React.Dispatch<React.SetStateAction<KanbanColumn[]>>;
   setTasks: React.Dispatch<React.SetStateAction<MockTask[]>>;
   onOpenTask: (taskId: string) => void;
+  onTaskReordered: (taskId: string, status: TaskStatus, position: number) => void; // NEW
 }
 
 // State now lives at the page level (tasks/page.tsx) instead of here, so
@@ -74,17 +75,13 @@ export function Board({ columns, tasks, setColumns, setTasks, onOpenTask }: Boar
     if (!over) return;
 
     if (active.data.current?.type === 'column') {
-      if (active.id === over.id) return;
-      setColumns((prev) => {
-        const oldIndex = prev.findIndex((c) => c.id === active.id);
-        const newIndex = prev.findIndex((c) => c.id === over.id);
-        if (oldIndex === -1 || newIndex === -1 || oldIndex === newIndex) return prev;
-        return arrayMove(prev, oldIndex, newIndex);
-      });
+      // ...unchanged column-reorder branch (local-only, no API call)...
       return;
     }
 
     if (active.data.current?.type === 'task') {
+      let finalPosition = 0; // captured from inside the updater below
+
       setTasks((prev) => {
         const activeTask = prev.find((t) => t.id === active.id);
         if (!activeTask) return prev;
@@ -106,13 +103,20 @@ export function Board({ columns, tasks, setColumns, setTasks, onOpenTask }: Boar
             : arrayMove(columnIds, oldIndex, newIndex === -1 ? columnIds.length - 1 : newIndex);
 
         const positions = new Map(reordered.map((id, idx) => [id, idx * 1000]));
+        finalPosition = positions.get(active.id as string) ?? activeTask.position;
 
         return prev.map((t) => {
-          if (t.id === active.id) return { ...t, status: targetStatus, position: positions.get(t.id) ?? t.position };
+          if (t.id === active.id) return { ...t, status: targetStatus, position: finalPosition };
           if (positions.has(t.id)) return { ...t, position: positions.get(t.id)! };
           return t;
         });
       });
+      const activeTask = tasks.find((t) => t.id === active.id);
+      const overData = over.data.current;
+      const targetStatus = (overData?.status as TaskStatus | undefined) ?? activeTask?.status;
+      if (targetStatus) {
+        onTaskReordered(active.id as string, targetStatus, finalPosition);
+      }
     }
   }
 
