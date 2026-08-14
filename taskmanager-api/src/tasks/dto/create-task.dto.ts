@@ -25,14 +25,14 @@ export class CreateTaskDto {
   @IsNumber()
   position?: number;
 
-  // --- NEW: Phase 4 fields ---
   @IsOptional()
   @IsDateString()
   dueDate?: string;
 
-  @IsOptional()
+  // Required now — tasks cannot exist without a project (per chat: "without
+  // a project he can't add any task"). Was optional in the previous phase.
   @IsUUID()
-  projectId?: string;
+  projectId: string;
 
   @IsOptional()
   @IsUUID()

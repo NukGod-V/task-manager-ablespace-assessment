@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Task } from './entities/task.entity';
@@ -11,15 +11,23 @@ import { Project } from '../projects/entities/project.entity';
 @Injectable()
 export class TasksService {
   constructor(
-    @InjectRepository(Task)
-    private readonly taskRepository: Repository<Task>,
+    @InjectRepository(Task) private readonly taskRepository: Repository<Task>,
+    @InjectRepository(Project) private readonly projectRepository: Repository<Project>,
   ) {}
 
-  async create(dto: CreateTaskDto, owner: User): Promise<Task> {
-    // project/assignee are set as bare { id } references rather than
-    // fetched + validated first — keeps this fast for the prototype.
-    // A NotFoundException guard for invalid projectId/assigneeId is the
-    // natural hardening step once this isn't "make it exist first."
+  // Central membership check — tasks are now scoped to project membership,
+  // not just task ownership. This is the core of the PM/assignment model
+  // from the chat.
+  private async assertProjectMember(projectId: string, userId: string): Promise<Project> {
+    const project = await this.projectRepository.findOne({ where: { id: projectId } });
+    if (!project) throw new NotFoundException(`Project ${projectId} not found`);
+    const isMember = project.lead?.id === userId || project.members.some((m) => m.id === userId);
+    if (!isMember) throw new ForbiddenException('You are not a member of this project');
+    return project;
+  }
+
+  async create(dto: CreateTaskDto, ownerId: string): Promise<Task> {
+    const project = await this.assertProjectMember(dto.projectId, ownerId);
     const task = this.taskRepository.create({
       title: dto.title,
       description: dto.description ?? null,
@@ -27,26 +35,28 @@ export class TasksService {
       priority: dto.priority,
       position: dto.position ?? 0,
       dueDate: dto.dueDate ?? null,
-      owner,
-      project: dto.projectId ? ({ id: dto.projectId } as Project) : null,
+      owner: { id: ownerId } as User,
+      project,
       assignee: dto.assigneeId ? ({ id: dto.assigneeId } as User) : null,
     });
     return this.taskRepository.save(task);
   }
 
-  async findAllForUser(userId: string): Promise<Task[]> {
+  async findAllForProject(projectId: string, userId: string): Promise<Task[]> {
+    await this.assertProjectMember(projectId, userId);
     return this.taskRepository.find({
-      where: { owner: { id: userId } },
+      where: { project: { id: projectId } },
       order: { position: 'ASC' },
     });
   }
 
   async findOne(id: string, userId: string): Promise<Task> {
-    const task = await this.taskRepository.findOne({
-      where: { id, owner: { id: userId } },
-    });
-    if (!task) {
-      throw new NotFoundException(`Task ${id} not found`);
+    const task = await this.taskRepository.findOne({ where: { id } });
+    if (!task) throw new NotFoundException(`Task ${id} not found`);
+    if (task.project) {
+      await this.assertProjectMember(task.project.id, userId);
+    } else if (task.owner.id !== userId) {
+      throw new ForbiddenException();
     }
     return task;
   }
@@ -54,19 +64,13 @@ export class TasksService {
   async update(id: string, dto: UpdateTaskDto, userId: string): Promise<Task> {
     const task = await this.findOne(id, userId);
     const { projectId, assigneeId, ...rest } = dto;
-
     Object.assign(task, rest);
-
-    // Handled separately from Object.assign since these are relation
-    // objects, not plain columns — assigning `undefined` would wrongly
-    // wipe them on every PATCH that doesn't mention them.
     if (projectId !== undefined) {
-      task.project = projectId ? ({ id: projectId } as Project) : null;
+      task.project = projectId ? await this.assertProjectMember(projectId, userId) : null;
     }
     if (assigneeId !== undefined) {
       task.assignee = assigneeId ? ({ id: assigneeId } as User) : null;
     }
-
     return this.taskRepository.save(task);
   }
 

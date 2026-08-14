@@ -24,4 +24,9 @@ export class UsersService {
   async findById(id: string): Promise<User | null> {
     return this.userRepository.findOneBy({ id });
   }
+  async findAll(): Promise<User[]> {
+    // Powers the "add members" picker on Create Project — every guest user,
+    // no search/pagination. Fine at demo scale.
+    return this.userRepository.find({ order: { createdAt: 'ASC' } });
+  }
 }

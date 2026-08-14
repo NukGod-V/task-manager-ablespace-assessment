@@ -53,6 +53,7 @@ export class Task {
   // cascade-delete its Tasks, just orphan them back to no project.
   @ManyToOne(() => Project, (project) => project.tasks, {
     nullable: true,
+    eager: true,
     onDelete: 'SET NULL',
   })
   project: Project | null;

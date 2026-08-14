@@ -7,21 +7,22 @@ import { UsersModule } from '../users/users.module';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { JwtStrategy } from './strategies/jwt.strategy';
+import { ProjectsModule } from '../projects/projects.module';
 
 @Module({
   imports: [
     UsersModule,
+    ProjectsModule,
     PassportModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
-      secret: config.get<string>('JWT_SECRET'),
-      signOptions: {
-        // Cast as 'any' to bypass the strict StringValue literal type check
-        expiresIn: config.get<string>('JWT_EXPIRES_IN') as any
-      },
-    }),
+        secret: config.get<string>('JWT_SECRET'),
+        signOptions: {
+          expiresIn: config.get<string>('JWT_EXPIRES_IN') as any
+        },
+      }),
     }),
   ],
   controllers: [AuthController],

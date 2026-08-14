@@ -2,13 +2,12 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { User } from './entities/user.entity';
 import { UsersService } from './users.service';
+import { UsersController } from './users.controller';
 
 @Module({
-  // TypeOrmModule.forFeature registers the repository for this entity
-  // scoped to this module — keeps User's persistence logic contained here
-  // even though Auth and Tasks both need to reference it.
   imports: [TypeOrmModule.forFeature([User])],
+  controllers: [UsersController],
   providers: [UsersService],
-  exports: [UsersService], // exported so AuthModule can inject it
+  exports: [UsersService],
 })
 export class UsersModule {}

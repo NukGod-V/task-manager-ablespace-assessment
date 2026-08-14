@@ -1,13 +1,5 @@
 import {
-  Controller,
-  Get,
-  Post,
-  Patch,
-  Delete,
-  Body,
-  Param,
-  UseGuards,
-  Req,
+  Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards, Req, BadRequestException,
 } from '@nestjs/common';
 import { Request } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -20,8 +12,6 @@ interface AuthedRequest extends Request {
   user: { userId: string; username: string };
 }
 
-// Guard applied at controller level — every route here requires a valid
-// guest/Google JWT, matching "Task CRUD" being a protected feature.
 @UseGuards(JwtAuthGuard)
 @Controller('tasks')
 export class TasksController {
@@ -29,12 +19,16 @@ export class TasksController {
 
   @Post()
   create(@Body() dto: CreateTaskDto, @Req() req: AuthedRequest) {
-    return this.tasksService.create(dto, { id: req.user.userId } as any);
+    return this.tasksService.create(dto, req.user.userId);
   }
 
+  // projectId is now required — a task list is always scoped to one project.
   @Get()
-  findAll(@Req() req: AuthedRequest) {
-    return this.tasksService.findAllForUser(req.user.userId);
+  findAll(@Query('projectId') projectId: string, @Req() req: AuthedRequest) {
+    if (!projectId) {
+      throw new BadRequestException('projectId query parameter is required');
+    }
+    return this.tasksService.findAllForProject(projectId, req.user.userId);
   }
 
   @Get(':id')
@@ -43,20 +37,12 @@ export class TasksController {
   }
 
   @Patch(':id')
-  update(
-    @Param('id') id: string,
-    @Body() dto: UpdateTaskDto,
-    @Req() req: AuthedRequest,
-  ) {
+  update(@Param('id') id: string, @Body() dto: UpdateTaskDto, @Req() req: AuthedRequest) {
     return this.tasksService.update(id, dto, req.user.userId);
   }
 
   @Patch(':id/reorder')
-  reorder(
-    @Param('id') id: string,
-    @Body() dto: ReorderTaskDto,
-    @Req() req: AuthedRequest,
-  ) {
+  reorder(@Param('id') id: string, @Body() dto: ReorderTaskDto, @Req() req: AuthedRequest) {
     return this.tasksService.reorder(id, dto, req.user.userId);
   }
 
