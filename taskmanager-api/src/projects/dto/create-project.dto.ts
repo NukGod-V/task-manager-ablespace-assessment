@@ -9,4 +9,8 @@ export class CreateProjectDto {
   @IsOptional()
   @IsUUID()
   workspaceId?: string;
+
+  @IsOptional()
+  @IsUUID('4', { each: true })
+  memberIds?: string[];
 }

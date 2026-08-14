@@ -3,12 +3,12 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { Project } from './entities/project.entity';
 import { ProjectsService } from './projects.service';
 import { ProjectsController } from './projects.controller';
-import { AuthModule } from '../auth/auth.module'; // provides JwtAuthGuard's dependencies
+import { TasksModule } from '../tasks/tasks.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Project]), AuthModule],
+  imports: [TypeOrmModule.forFeature([Project]), TasksModule],
   providers: [ProjectsService],
   controllers: [ProjectsController],
-  exports: [TypeOrmModule],
+  exports: [ProjectsService], // AuthModule needs this to create a default project on guest signup
 })
 export class ProjectsModule {}

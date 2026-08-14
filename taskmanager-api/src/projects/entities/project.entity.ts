@@ -1,12 +1,6 @@
 import {
-  Entity,
-  PrimaryGeneratedColumn,
-  Column,
-  OneToMany,
-  ManyToMany,
-  JoinTable,
-  CreateDateColumn,
-  UpdateDateColumn,
+  Entity, PrimaryGeneratedColumn, Column, OneToMany, ManyToOne, ManyToMany, JoinTable,
+  CreateDateColumn, UpdateDateColumn,
 } from 'typeorm';
 import { Task } from '../../tasks/entities/task.entity';
 import { User } from '../../users/entities/user.entity';
@@ -19,20 +13,18 @@ export class Project {
   @Column()
   name: string;
 
-  // Plain column rather than a Workspace relation — no Workspace entity
-  // exists yet in this schema (figma-extraction §4.1 defines one, but it
-  // hasn't been built). Kept as a bare uuid so Project → Workspace can be
-  // wired up later without another breaking migration.
   @Column({ type: 'uuid', nullable: true })
   workspaceId: string | null;
+
+  // Matches figma-extraction §4.1's leadId. Whoever creates a project
+  // becomes its lead by default; only the lead can manage membership.
+  @ManyToOne(() => User, { eager: true, nullable: true, onDelete: 'SET NULL' })
+  lead: User | null;
 
   @OneToMany(() => Task, (task) => task.project)
   tasks: Task[];
 
-  // "Share Projects with specific users" — many-to-many membership via a
-  // join table. No membership-management endpoints yet (add/remove member),
-  // just the schema-level support requested.
-  @ManyToMany(() => User)
+  @ManyToMany(() => User, { eager: true })
   @JoinTable({
     name: 'project_members',
     joinColumn: { name: 'projectId', referencedColumnName: 'id' },
