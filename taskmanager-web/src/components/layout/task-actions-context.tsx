@@ -2,28 +2,43 @@
 
 import * as React from 'react';
 import type { CreateTaskInput } from '@/lib/api';
+import type { TaskStatus } from '@/types/task';
 
 type CreateTaskHandler = (input: CreateTaskInput) => Promise<void>;
+type OpenAddTaskFn = (defaultStatus?: TaskStatus) => void;
 
 interface TaskActionsContextValue {
   createTaskHandler: CreateTaskHandler | null;
   setCreateTaskHandler: (fn: CreateTaskHandler | null) => void;
+  // Bridges Board's per-column "+" buttons (no access to Topbar's modal
+  // state) with Topbar (which owns the actual Add Task modal).
+  openAddTaskModal: OpenAddTaskFn;
+  registerOpenAddTaskModal: (fn: OpenAddTaskFn | null) => void;
 }
 
 const TaskActionsContext = React.createContext<TaskActionsContextValue | undefined>(undefined);
 
-// Bridges the Topbar (lives in the shared AppShell, no access to page
-// state) with whichever page currently knows how to actually create a
-// task. Only /tasks registers a handler right now — /projects has none,
-// so the Add button there falls back to a "coming soon" notice instead
-// of silently doing nothing.
 export function TaskActionsProvider({ children }: { children: React.ReactNode }) {
   const [createTaskHandler, setCreateTaskHandlerState] = React.useState<CreateTaskHandler | null>(null);
+  const [openFn, setOpenFn] = React.useState<OpenAddTaskFn | null>(null);
+
   const setCreateTaskHandler = React.useCallback((fn: CreateTaskHandler | null) => {
     setCreateTaskHandlerState(() => fn);
   }, []);
+
+  const registerOpenAddTaskModal = React.useCallback((fn: OpenAddTaskFn | null) => {
+    setOpenFn(() => fn);
+  }, []);
+
+  const openAddTaskModal = React.useCallback<OpenAddTaskFn>(
+    (defaultStatus) => openFn?.(defaultStatus),
+    [openFn],
+  );
+
   return (
-    <TaskActionsContext.Provider value={{ createTaskHandler, setCreateTaskHandler }}>
+    <TaskActionsContext.Provider
+      value={{ createTaskHandler, setCreateTaskHandler, openAddTaskModal, registerOpenAddTaskModal }}
+    >
       {children}
     </TaskActionsContext.Provider>
   );
