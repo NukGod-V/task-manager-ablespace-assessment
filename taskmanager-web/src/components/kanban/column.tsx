@@ -10,17 +10,16 @@ import type { KanbanColumn, MockTask } from '@/types/task';
 
 interface ColumnProps {
   column: KanbanColumn;
-  tasks: MockTask[]; // pre-filtered + sorted for this column by the Board
+  tasks: MockTask[];
+  onOpenTask: (taskId: string) => void;
 }
 
-export function Column({ column, tasks }: ColumnProps) {
+export function Column({ column, tasks, onOpenTask }: ColumnProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: column.id,
     data: { type: 'column' },
   });
 
-  // Separate droppable so an EMPTY column still accepts a dropped card —
-  // SortableContext alone has nothing to hit-test against when its items list is empty.
   const { setNodeRef: setDropRef } = useDroppable({
     id: column.id,
     data: { type: 'column-drop-area' },
@@ -33,12 +32,14 @@ export function Column({ column, tasks }: ColumnProps) {
       ref={setNodeRef}
       style={style}
       className={cn(
-        'flex h-full w-[288px] shrink-0 flex-col rounded-xl bg-column-header',
+        // h-fit + max-h-full: column hugs its content and rounds off after
+        // the last card, but still caps at the board's height and scrolls
+        // internally if it has more cards than fit — was h-full before.
+        'flex h-fit max-h-full w-[288px] shrink-0 flex-col rounded-xl bg-column-header',
         isDragging && 'opacity-50',
       )}
     >
       <div className="flex items-center gap-2 px-3 py-3">
-        {/* ⠿ — the ONLY drag affordance for column reordering, per spec */}
         <button
           {...attributes}
           {...listeners}
@@ -63,10 +64,10 @@ export function Column({ column, tasks }: ColumnProps) {
         </button>
       </div>
 
-      <div ref={setDropRef} className="flex flex-1 flex-col gap-2 overflow-y-auto px-2 pb-2">
+      <div ref={setDropRef} className="flex flex-col gap-2 overflow-y-auto px-2 pb-2">
         <SortableContext items={tasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
           {tasks.map((task) => (
-            <TaskCard key={task.id} task={task} />
+            <TaskCard key={task.id} task={task} onOpen={() => onOpenTask(task.id)} />
           ))}
         </SortableContext>
 

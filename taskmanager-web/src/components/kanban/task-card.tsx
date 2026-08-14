@@ -2,7 +2,7 @@
 
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { GripVertical, MoreHorizontal, CalendarDays } from 'lucide-react';
+import { GripVertical, MoreHorizontal, CalendarDays, Tag } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { MockTask } from '@/types/task';
 
@@ -28,7 +28,12 @@ function formatDate(dueDate: string) {
   return new Date(dueDate).toLocaleDateString('en-US', { day: 'numeric', month: 'short' });
 }
 
-export function TaskCard({ task }: { task: MockTask }) {
+interface TaskCardProps {
+  task: MockTask;
+  onOpen: () => void;
+}
+
+export function TaskCard({ task, onOpen }: TaskCardProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: task.id,
     data: { type: 'task', status: task.status },
@@ -41,16 +46,17 @@ export function TaskCard({ task }: { task: MockTask }) {
     <div
       ref={setNodeRef}
       style={style}
+      onClick={onOpen}
       className={cn(
-        'group rounded-lg border border-border bg-card p-4',
+        'group cursor-pointer rounded-lg border border-border bg-card p-4',
         isDragging && 'opacity-50',
       )}
     >
       <div className="flex items-start gap-2">
-        {/* Six-dot handle — ONLY visible on hover, per explicit design requirement */}
         <button
           {...attributes}
           {...listeners}
+          onClick={(e) => e.stopPropagation()} // don't open detail when grabbing the handle
           className="mt-0.5 shrink-0 cursor-grab text-muted opacity-0 transition-opacity group-hover:opacity-100 active:cursor-grabbing"
           aria-label="Drag task"
         >
@@ -60,6 +66,7 @@ export function TaskCard({ task }: { task: MockTask }) {
         <p className="flex-1 text-sm font-medium text-foreground">{task.title}</p>
 
         <button
+          onClick={(e) => e.stopPropagation()}
           className="shrink-0 rounded p-0.5 text-muted opacity-0 transition-opacity hover:bg-sidebar-active group-hover:opacity-100"
           aria-label="Card menu"
         >
@@ -86,8 +93,9 @@ export function TaskCard({ task }: { task: MockTask }) {
           {task.labels.map((label) => (
             <span
               key={label}
-              className="rounded-full bg-chip-bg px-2 py-0.5 text-[11px] font-medium text-chip-text"
+              className="flex items-center gap-1 rounded-full bg-chip-bg px-2 py-0.5 text-[11px] font-medium text-chip-text"
             >
+              <Tag size={10} />
               {label}
             </span>
           ))}
