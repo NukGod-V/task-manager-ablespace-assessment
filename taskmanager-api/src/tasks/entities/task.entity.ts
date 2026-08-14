@@ -7,6 +7,7 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
+import { Project } from '../../projects/entities/project.entity';
 
 export enum TaskStatus {
   BACKLOG = 'backlog',
@@ -35,31 +36,36 @@ export class Task {
   @Column({ type: 'text', nullable: true })
   description: string | null;
 
-  @Column({
-    type: 'enum',
-    enum: TaskStatus,
-    default: TaskStatus.BACKLOG,
-  })
+  @Column({ type: 'enum', enum: TaskStatus, default: TaskStatus.BACKLOG })
   status: TaskStatus;
 
-  @Column({
-    type: 'enum',
-    enum: TaskPriority,
-    default: TaskPriority.NO_PRIORITY,
-  })
+  @Column({ type: 'enum', enum: TaskPriority, default: TaskPriority.NO_PRIORITY })
   priority: TaskPriority;
 
-  // Float rather than int so a card can be inserted between two existing
-  // positions (e.g. 1.5 between 1 and 2) without re-indexing the whole column
-  // on every drag-and-drop reorder — standard Kanban ordering pattern.
   @Column({ type: 'float', default: 0 })
   position: number;
 
-  // Owner of the task — kept as a direct relation for now; a separate
-  // TaskAssignee join table (per the figma spec, for multi-assignee support)
-  // is a later-phase addition once Projects/Teams exist.
+  // NEW — matches the frontend mock's dueDate field.
+  @Column({ type: 'date', nullable: true })
+  dueDate: string | null;
+
+  // NEW — nullable + onDelete SET NULL: deleting a Project shouldn't
+  // cascade-delete its Tasks, just orphan them back to no project.
+  @ManyToOne(() => Project, (project) => project.tasks, {
+    nullable: true,
+    onDelete: 'SET NULL',
+  })
+  project: Project | null;
+
+  // owner = who created/holds the task (existing field, drives the
+  // findAllForUser scoping in TasksService — unchanged).
   @ManyToOne(() => User, { eager: true, onDelete: 'CASCADE' })
   owner: User;
+
+  // NEW — assignee = who the task is assigned TO, distinct from owner.
+  // Nullable since not every task has an assignee yet.
+  @ManyToOne(() => User, { nullable: true, eager: true, onDelete: 'SET NULL' })
+  assignee: User | null;
 
   @CreateDateColumn()
   createdAt: Date;
