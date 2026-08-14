@@ -6,6 +6,7 @@ import { CreateTaskDto } from './dto/create-task.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
 import { ReorderTaskDto } from './dto/reorder-task.dto';
 import { User } from '../users/entities/user.entity';
+import { Project } from '../projects/entities/project.entity';
 
 @Injectable()
 export class TasksService {
@@ -15,12 +16,25 @@ export class TasksService {
   ) {}
 
   async create(dto: CreateTaskDto, owner: User): Promise<Task> {
-    const task = this.taskRepository.create({ ...dto, owner });
+    // project/assignee are set as bare { id } references rather than
+    // fetched + validated first — keeps this fast for the prototype.
+    // A NotFoundException guard for invalid projectId/assigneeId is the
+    // natural hardening step once this isn't "make it exist first."
+    const task = this.taskRepository.create({
+      title: dto.title,
+      description: dto.description ?? null,
+      status: dto.status,
+      priority: dto.priority,
+      position: dto.position ?? 0,
+      dueDate: dto.dueDate ?? null,
+      owner,
+      project: dto.projectId ? ({ id: dto.projectId } as Project) : null,
+      assignee: dto.assigneeId ? ({ id: dto.assigneeId } as User) : null,
+    });
     return this.taskRepository.save(task);
   }
 
   async findAllForUser(userId: string): Promise<Task[]> {
-    // Scoped to the requesting user so one guest can never see another's tasks.
     return this.taskRepository.find({
       where: { owner: { id: userId } },
       order: { position: 'ASC' },
@@ -39,13 +53,23 @@ export class TasksService {
 
   async update(id: string, dto: UpdateTaskDto, userId: string): Promise<Task> {
     const task = await this.findOne(id, userId);
-    Object.assign(task, dto);
+    const { projectId, assigneeId, ...rest } = dto;
+
+    Object.assign(task, rest);
+
+    // Handled separately from Object.assign since these are relation
+    // objects, not plain columns — assigning `undefined` would wrongly
+    // wipe them on every PATCH that doesn't mention them.
+    if (projectId !== undefined) {
+      task.project = projectId ? ({ id: projectId } as Project) : null;
+    }
+    if (assigneeId !== undefined) {
+      task.assignee = assigneeId ? ({ id: assigneeId } as User) : null;
+    }
+
     return this.taskRepository.save(task);
   }
 
-  // Separate from update() to keep drag-and-drop's intent explicit and
-  // cheap — it only ever touches status + position, matching the
-  // PATCH /tasks/:id/reorder endpoint in the spec.
   async reorder(id: string, dto: ReorderTaskDto, userId: string): Promise<Task> {
     const task = await this.findOne(id, userId);
     task.status = dto.status;

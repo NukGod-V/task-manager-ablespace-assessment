@@ -1,12 +1,14 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Project } from './entities/project.entity';
+import { ProjectsService } from './projects.service';
+import { ProjectsController } from './projects.controller';
+import { AuthModule } from '../auth/auth.module'; // provides JwtAuthGuard's dependencies
 
-// Minimal for now — just enough to register Project with TypeORM so
-// autoLoadEntities picks it up and Task's relation to it resolves.
-// CRUD endpoints for Projects are a separate, later task.
 @Module({
-  imports: [TypeOrmModule.forFeature([Project])],
+  imports: [TypeOrmModule.forFeature([Project]), AuthModule],
+  providers: [ProjectsService],
+  controllers: [ProjectsController],
   exports: [TypeOrmModule],
 })
 export class ProjectsModule {}

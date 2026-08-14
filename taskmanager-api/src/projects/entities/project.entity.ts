@@ -23,8 +23,8 @@ export class Project {
   // exists yet in this schema (figma-extraction §4.1 defines one, but it
   // hasn't been built). Kept as a bare uuid so Project → Workspace can be
   // wired up later without another breaking migration.
-  @Column({ type: 'uuid' })
-  workspaceId: string;
+  @Column({ type: 'uuid', nullable: true })
+  workspaceId: string | null;
 
   @OneToMany(() => Task, (task) => task.project)
   tasks: Task[];

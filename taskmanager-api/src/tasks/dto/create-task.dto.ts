@@ -1,10 +1,5 @@
 import {
-  IsString,
-  IsNotEmpty,
-  IsOptional,
-  IsEnum,
-  IsNumber,
-  MaxLength,
+  IsString, IsNotEmpty, IsOptional, IsEnum, IsNumber, MaxLength, IsUUID, IsDateString,
 } from 'class-validator';
 import { TaskStatus, TaskPriority } from '../entities/task.entity';
 
@@ -19,16 +14,27 @@ export class CreateTaskDto {
   description?: string;
 
   @IsOptional()
-  @IsEnum(TaskStatus, { message: 'status must be a valid TaskStatus value' })
+  @IsEnum(TaskStatus)
   status?: TaskStatus;
 
   @IsOptional()
-  @IsEnum(TaskPriority, {
-    message: 'priority must be a valid TaskPriority value',
-  })
+  @IsEnum(TaskPriority)
   priority?: TaskPriority;
 
   @IsOptional()
   @IsNumber()
   position?: number;
+
+  // --- NEW: Phase 4 fields ---
+  @IsOptional()
+  @IsDateString()
+  dueDate?: string;
+
+  @IsOptional()
+  @IsUUID()
+  projectId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  assigneeId?: string;
 }
