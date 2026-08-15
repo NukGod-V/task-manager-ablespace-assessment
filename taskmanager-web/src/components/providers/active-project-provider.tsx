@@ -12,13 +12,14 @@ const STORAGE_KEY = 'activeProject';
 interface ActiveProjectContextValue {
   activeProject: ActiveProjectRef | null;
   setActiveProject: (project: ActiveProjectRef) => void;
+  hydrated: boolean; // NEW — lets consumers wait instead of racing ahead
 }
 
 const ActiveProjectContext = React.createContext<ActiveProjectContextValue | undefined>(undefined);
 
 export function ActiveProjectProvider({ children }: { children: React.ReactNode }) {
   const [activeProject, setActiveProjectState] = React.useState<ActiveProjectRef | null>(null);
-  const [mounted, setMounted] = React.useState(false);
+  const [hydrated, setHydrated] = React.useState(false);
 
   React.useEffect(() => {
     const stored = window.localStorage.getItem(STORAGE_KEY);
@@ -29,7 +30,7 @@ export function ActiveProjectProvider({ children }: { children: React.ReactNode 
         // ignore malformed storage
       }
     }
-    setMounted(true);
+    setHydrated(true);
   }, []);
 
   const setActiveProject = React.useCallback((project: ActiveProjectRef) => {
@@ -38,7 +39,7 @@ export function ActiveProjectProvider({ children }: { children: React.ReactNode 
   }, []);
 
   return (
-    <ActiveProjectContext.Provider value={{ activeProject: mounted ? activeProject : null, setActiveProject }}>
+    <ActiveProjectContext.Provider value={{ activeProject, setActiveProject, hydrated }}>
       {children}
     </ActiveProjectContext.Provider>
   );
