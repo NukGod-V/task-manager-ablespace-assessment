@@ -2,16 +2,17 @@
 
 import * as React from 'react';
 import type { CreateTaskInput } from '@/lib/api';
-import type { TaskStatus } from '@/types/task';
+import type { MockTask, TaskStatus } from '@/types/task';
 
-type CreateTaskHandler = (input: CreateTaskInput) => Promise<void>;
+// projectId is now an explicit argument, not something baked into the
+// handler at registration time — required so Add Task can target a
+// DIFFERENT project than whichever one is currently active on screen.
+type CreateTaskHandler = (projectId: string, input: CreateTaskInput) => Promise<MockTask>;
 type OpenAddTaskFn = (defaultStatus?: TaskStatus) => void;
 
 interface TaskActionsContextValue {
   createTaskHandler: CreateTaskHandler | null;
   setCreateTaskHandler: (fn: CreateTaskHandler | null) => void;
-  // Bridges Board's per-column "+" buttons (no access to Topbar's modal
-  // state) with Topbar (which owns the actual Add Task modal).
   openAddTaskModal: OpenAddTaskFn;
   registerOpenAddTaskModal: (fn: OpenAddTaskFn | null) => void;
 }
