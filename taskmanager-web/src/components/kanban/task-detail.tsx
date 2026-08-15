@@ -12,7 +12,7 @@ import type { MockTask, TaskStatus, TaskPriority } from '@/types/task';
 // Inferred colors — only "backlog" dot color was in the extraction doc (§1.1);
 // the rest of the status/priority mapping is a reasonable extrapolation,
 // not pulled from a confirmed Figma value.
-const STATUS_OPTIONS: { value: TaskStatus; label: string; dot: string }[] = [
+export const STATUS_OPTIONS: { value: TaskStatus; label: string; dot: string }[] = [
   { value: 'backlog', label: 'Backlog', dot: 'bg-amber-500' },
   { value: 'todo', label: 'To Do', dot: 'bg-gray-400' },
   { value: 'doing', label: 'Doing', dot: 'bg-accent' },
@@ -20,7 +20,7 @@ const STATUS_OPTIONS: { value: TaskStatus; label: string; dot: string }[] = [
   { value: 'on_hold', label: 'On Hold', dot: 'bg-rose-500' },
 ];
 
-const PRIORITY_OPTIONS: { value: TaskPriority; label: string; color: string }[] = [
+export const PRIORITY_OPTIONS: { value: TaskPriority; label: string; color: string }[] = [
   { value: 'no_priority', label: 'No Priority', color: 'bg-priority-none' },
   { value: 'urgent', label: 'Urgent', color: 'bg-priority-urgent' },
   { value: 'high', label: 'High', color: 'bg-priority-high' },

@@ -94,6 +94,7 @@ function mapApiTaskToUi(task: ApiTask): MockTask {
 export interface CreateTaskInput {
   title: string;
   status?: TaskStatus;
+  description?: string;
   priority?: TaskPriority;
   dueDate?: string;
   assigneeId?: string;
