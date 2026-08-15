@@ -155,8 +155,8 @@ export function AddTaskPanel({ defaultStatus, onClose }: AddTaskPanelProps) {
         assigneeId: assigneeId || undefined,
       });
       onClose();
-    } catch {
-      setError('Could not create the task. Is the API running?');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not create the task.');
       setSubmitting(false);
     }
   }

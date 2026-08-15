@@ -47,7 +47,18 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
     },
   });
   if (!res.ok) {
-    throw new Error(`API ${options.method ?? 'GET'} ${path} failed: ${res.status}`);
+    // NestJS's default error responses are JSON with a `message` field —
+    // surface that instead of just the status code, so failures like "not
+    // a project member" or a validation error are actually readable
+    // instead of collapsing into a generic "is the API running?" guess.
+    let detail = '';
+    try {
+      const body = await res.json();
+      detail = body?.message ? `: ${Array.isArray(body.message) ? body.message.join(', ') : body.message}` : '';
+    } catch {
+      // response wasn't JSON — no extra detail available
+    }
+    throw new Error(`API ${options.method ?? 'GET'} ${path} failed (${res.status})${detail}`);
   }
   if (res.status === 204) return undefined as T;
   return res.json();
