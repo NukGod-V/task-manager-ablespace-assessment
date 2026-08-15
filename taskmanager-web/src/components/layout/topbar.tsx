@@ -10,8 +10,10 @@ import { cn } from '@/lib/utils';
 import { useClickOutside } from '@/hooks/use-click-outside';
 import { useSidebar } from './sidebar-context';
 import { useViewMode } from './view-mode-context';
+import { useFields } from './fields-context';
 import { useTaskActions } from './task-actions-context';
 import { AddTaskPanel } from '@/components/kanban/add-task-panel';
+import { TASK_FIELDS } from '@/lib/task-fields';
 import type { TaskStatus } from '@/types/task';
 
 function getPageMeta(pathname: string) {
@@ -19,22 +21,13 @@ function getPageMeta(pathname: string) {
   return { title: 'Tasks', breadcrumb: ['Tasks'], viewKey: 'tasks' };
 }
 
+// Fields now reads/writes REAL shared state via useFields, instead of a
+// local checked object that reset every time the popover closed.
 function FieldsPopover({ viewKey, onClose }: { viewKey: string; onClose: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
   useClickOutside(ref, onClose);
   const [viewMode, setViewMode] = useViewMode(viewKey);
-
-  const defaults =
-    viewMode === 'list'
-      ? { Priority: true, Members: true, 'Due Date': true, Labels: false, Status: false, Reporter: false }
-      : { Priority: true, Members: true, 'Due Date': true, Labels: true, Status: false, Reporter: false };
-
-  const [checked, setChecked] = useState(defaults);
-
-  useEffect(() => {
-    setChecked(defaults);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [viewMode]);
+  const { fields, toggleField } = useFields(viewKey, viewMode);
 
   return (
     <div ref={ref} className="absolute right-0 top-full z-50 mt-1 w-56 rounded-xl border border-border bg-card p-1.5 shadow-lg">
@@ -53,13 +46,13 @@ function FieldsPopover({ viewKey, onClose }: { viewKey: string; onClose: () => v
         </button>
       </div>
 
-      {Object.keys(checked).map((field) => (
+      {TASK_FIELDS.map((field) => (
         <label key={field} className="flex items-center justify-between rounded-lg px-2.5 py-2 text-sm text-foreground hover:bg-sidebar-active">
           {field}
           <input
             type="checkbox"
-            checked={checked[field as keyof typeof checked]}
-            onChange={() => setChecked((prev) => ({ ...prev, [field]: !prev[field as keyof typeof prev] }))}
+            checked={fields[field]}
+            onChange={() => toggleField(field)}
             className="h-3.5 w-3.5 accent-accent"
           />
         </label>
@@ -229,9 +222,7 @@ export function Topbar() {
         </button>
       </header>
 
-      {addTaskOpen && (
-        <AddTaskPanel defaultStatus={prefillStatus} onClose={() => setAddTaskOpen(false)} />
-      )}
+      {addTaskOpen && <AddTaskPanel defaultStatus={prefillStatus} onClose={() => setAddTaskOpen(false)} />}
     </>
   );
 }

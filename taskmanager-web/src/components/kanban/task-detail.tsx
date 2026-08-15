@@ -300,7 +300,7 @@ export function TaskDetail({ task, onClose, onSave }: TaskDetailProps) {
             </div>
             <div className="flex items-center justify-between rounded-lg px-2 py-2 text-sm">
               <span className="text-muted">Reporter</span>
-              <span className="text-muted">—</span>
+              <span className="text-foreground">{task.reporter?.name ?? '—'}</span>
             </div>
           </div>
 
