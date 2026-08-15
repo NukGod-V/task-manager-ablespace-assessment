@@ -75,7 +75,10 @@ function SelectField<T extends string>({
 export function AddTaskPanel({ defaultStatus, onClose }: AddTaskPanelProps) {
   const { createTaskHandler } = useTaskActions();
   const { activeProject } = useActiveProject();
-  const currentUser = getStoredUser();
+  const [currentUser, setCurrentUser] = useState<ReturnType<typeof getStoredUser>>(null);
+    useEffect(() => {
+    setCurrentUser(getStoredUser());
+  }, []);
 
   const [projects, setProjects] = useState<UiProject[]>([]);
   const [projectId, setProjectId] = useState<string>(activeProject?.id ?? '');
@@ -164,7 +167,7 @@ export function AddTaskPanel({ defaultStatus, onClose }: AddTaskPanelProps) {
   const projectOptions = projects.map((p) => ({ value: p.id, label: p.name }));
   const assigneeOptions = [
     { value: '', label: 'Unassigned' },
-    ...(selectedProject?.members.map((m) => ({ value: m.id, label: m.username })) ?? []),
+    ...((selectedProject?.members ?? []).map((m) => ({ value: m.id, label: m.username }))),
   ];
 
   return (
