@@ -32,14 +32,12 @@ export default function TasksPage() {
       router.push('/login');
       return;
     }
-
-    // THE FIX: wait for the provider to finish reading localStorage before
-    // deciding whether to auto-pick a project. Previously this ran on the
-    // pre-hydration render (activeProject still null), auto-selected the
-    // newest project, and overwrote whatever the user had actually chosen.
     if (!hydrated) return;
 
     async function init() {
+      setLoading(true);
+      setError(null);
+
       let project = activeProject;
       if (!project) {
         const projects = await fetchProjects();
@@ -52,11 +50,23 @@ export default function TasksPage() {
         setActiveProject(project);
         return; // effect re-runs once activeProject updates
       }
+
       try {
         const loaded = await fetchTasks(project.id);
         setTasks(loaded);
-      } catch {
-        setError('Could not load tasks. Is the API running on :4000?');
+      } catch (err) {
+        const message = err instanceof Error ? err.message : '';
+        // Self-heal: a stale/invalid project reference (the exact bug this
+        // fix targets) shouldn't leave the user permanently stuck — fall
+        // back to a project they're actually a member of.
+        if (message.includes('403')) {
+          const projects = await fetchProjects();
+          if (projects.length > 0) {
+            setActiveProject({ id: projects[0].id, name: projects[0].name });
+            return;
+          }
+        }
+        setError(message || 'Could not load tasks. Is the API running on :4000?');
       } finally {
         setLoading(false);
       }
