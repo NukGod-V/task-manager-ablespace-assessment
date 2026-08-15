@@ -3,7 +3,7 @@
 import { useRef, useState } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { GripVertical, MoreHorizontal, CalendarDays, Tag, Pencil, SignalHigh } from 'lucide-react';
+import { GripVertical, MoreHorizontal, CalendarDays, Tag, Pencil } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useClickOutside } from '@/hooks/use-click-outside';
 import { PRIORITY_META, STATUS_META } from '@/lib/task-meta';
@@ -48,10 +48,14 @@ export function TaskCard({ task, visibleFields, onEdit }: TaskCardProps) {
   const overdue = isOverdue(task.dueDate);
   const priority = PRIORITY_META[task.priority];
   const statusMeta = STATUS_META[task.status];
+  const PriorityIcon = priority.icon;
 
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   useClickOutside(menuRef, () => setMenuOpen(false));
+
+  const showAssignee = visibleFields.Members && task.assignee;
+  const showDueDate = visibleFields['Due Date'] && task.dueDate;
 
   return (
     <div ref={setNodeRef} style={style} className={cn('group rounded-lg border border-border bg-card p-4', isDragging && 'opacity-50')}>
@@ -88,16 +92,13 @@ export function TaskCard({ task, visibleFields, onEdit }: TaskCardProps) {
         </div>
       </div>
 
-      {/* Priority — NEW: cards previously showed no priority indicator at all */}
       {visibleFields.Priority && task.priority !== 'no_priority' && (
         <div className={cn('mt-2 flex items-center gap-1 text-[11px] font-medium', priority.textColor)}>
-          <SignalHigh size={11} />
+          {PriorityIcon && <PriorityIcon size={12} />}
           {priority.label}
         </div>
       )}
 
-      {/* Status — redundant with column placement on the Board, but the
-          Fields toggle covers it per spec, so it's honored here too. */}
       {visibleFields.Status && (
         <div className="mt-2 flex items-center gap-1.5 text-[11px] text-muted">
           <span className={cn('h-1.5 w-1.5 rounded-full', statusMeta.dot)} />
@@ -105,12 +106,23 @@ export function TaskCard({ task, visibleFields, onEdit }: TaskCardProps) {
         </div>
       )}
 
-      {visibleFields.Members && task.assignee && (
+      {/* Assignee (left) + Due date (right) on ONE row — matches image 2 */}
+      {(showAssignee || showDueDate) && (
         <div className="mt-3 flex items-center gap-2">
-          <div className={cn('flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-br text-[9px] font-medium text-white', gradientFor(task.assignee.name))}>
-            {task.assignee.initials}
-          </div>
-          <span className="text-xs text-secondary">{task.assignee.role}</span>
+          {showAssignee && task.assignee && (
+            <div className="flex items-center gap-2">
+              <div className={cn('flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-br text-[9px] font-medium text-white', gradientFor(task.assignee.name))}>
+                {task.assignee.initials}
+              </div>
+              <span className="text-xs text-secondary">{task.assignee.role}</span>
+            </div>
+          )}
+          {showDueDate && task.dueDate && (
+            <div className={cn('ml-auto flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px]', overdue ? 'bg-date-overdue-bg text-date-overdue' : 'text-muted')}>
+              <CalendarDays size={11} />
+              {formatDate(task.dueDate)}
+            </div>
+          )}
         </div>
       )}
 
@@ -127,13 +139,6 @@ export function TaskCard({ task, visibleFields, onEdit }: TaskCardProps) {
 
       {visibleFields.Reporter && task.reporter && (
         <p className="mt-2 text-[11px] text-muted">Reported by {task.reporter.name}</p>
-      )}
-
-      {visibleFields['Due Date'] && task.dueDate && (
-        <div className={cn('mt-3 flex w-fit items-center gap-1 rounded-full px-2 py-0.5 text-[11px]', overdue ? 'bg-date-overdue-bg text-date-overdue' : 'text-muted')}>
-          <CalendarDays size={11} />
-          {formatDate(task.dueDate)}
-        </div>
       )}
     </div>
   );

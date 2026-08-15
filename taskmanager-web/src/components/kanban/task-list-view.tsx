@@ -67,6 +67,7 @@ export function TaskListView({ columns, tasks, visibleFields, onOpenTask }: Task
 function TaskRow({ task, visibleFields, onEdit }: { task: MockTask; visibleFields: FieldVisibility; onEdit: () => void }) {
   const priority = PRIORITY_META[task.priority];
   const statusMeta = STATUS_META[task.status];
+  const PriorityIcon = priority.icon;
 
   return (
     <div className="flex items-center gap-3 border-b border-border px-4 py-2.5 text-sm last:border-b-0 hover:bg-sidebar-active/50">
@@ -80,7 +81,8 @@ function TaskRow({ task, visibleFields, onEdit }: { task: MockTask; visibleField
       )}
 
       {visibleFields.Priority && (
-        <span className={cn('w-24 text-xs', priority.textColor)}>
+        <span className={cn('flex w-24 items-center gap-1 text-xs', priority.textColor)}>
+          {PriorityIcon && <PriorityIcon size={12} />}
           {task.priority === 'no_priority' ? '—' : priority.label}
         </span>
       )}
