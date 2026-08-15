@@ -3,7 +3,7 @@
 import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import {
-  Search, SlidersHorizontal, Filter, Plus, PanelLeft, X, List, LayoutGrid,
+  Search, SlidersHorizontal, Filter, Plus, PanelLeft, List, LayoutGrid,
   ChevronRight, Check, CircleDot, Users, UsersRound, UserCircle, CalendarDays, Tag,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -11,14 +11,13 @@ import { useClickOutside } from '@/hooks/use-click-outside';
 import { useSidebar } from './sidebar-context';
 import { useViewMode } from './view-mode-context';
 import { useTaskActions } from './task-actions-context';
-import type { TaskStatus, TaskPriority } from '@/types/task';
+import { AddTaskPanel } from '@/components/kanban/add-task-panel';
+import type { TaskStatus } from '@/types/task';
 
 function getPageMeta(pathname: string) {
   if (pathname.startsWith('/projects')) return { title: 'Projects', breadcrumb: ['Projects'], viewKey: 'projects' };
   return { title: 'Tasks', breadcrumb: ['Tasks'], viewKey: 'tasks' };
 }
-
-// --- Fields popover: List/Board toggle lives INSIDE it, per §2.4 ----------
 
 function FieldsPopover({ viewKey, onClose }: { viewKey: string; onClose: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -42,19 +41,13 @@ function FieldsPopover({ viewKey, onClose }: { viewKey: string; onClose: () => v
       <div className="mb-1.5 flex rounded-lg bg-sidebar p-1">
         <button
           onClick={() => setViewMode('list')}
-          className={cn(
-            'flex flex-1 items-center justify-center gap-1.5 rounded-md py-1.5 text-xs font-medium',
-            viewMode === 'list' ? 'bg-card text-foreground shadow-sm' : 'text-muted',
-          )}
+          className={cn('flex flex-1 items-center justify-center gap-1.5 rounded-md py-1.5 text-xs font-medium', viewMode === 'list' ? 'bg-card text-foreground shadow-sm' : 'text-muted')}
         >
           <List size={13} /> List
         </button>
         <button
           onClick={() => setViewMode('board')}
-          className={cn(
-            'flex flex-1 items-center justify-center gap-1.5 rounded-md py-1.5 text-xs font-medium',
-            viewMode === 'board' ? 'bg-card text-foreground shadow-sm' : 'text-muted',
-          )}
+          className={cn('flex flex-1 items-center justify-center gap-1.5 rounded-md py-1.5 text-xs font-medium', viewMode === 'board' ? 'bg-card text-foreground shadow-sm' : 'text-muted')}
         >
           <LayoutGrid size={13} /> Board
         </button>
@@ -74,8 +67,6 @@ function FieldsPopover({ viewKey, onClose }: { viewKey: string; onClose: () => v
     </div>
   );
 }
-
-// --- Filter popover: nested category -> value flyout ----------------------
 
 const FILTER_CATEGORIES = [
   { key: 'status', label: 'Status', icon: CircleDot, values: ['Backlog', 'To Do', 'Doing', 'Completed', 'On Hold'] },
@@ -118,7 +109,6 @@ function FilterPopover({ onClose }: { onClose: () => void }) {
               {count > 0 && <span className="text-xs text-muted">{count}</span>}
               <ChevronRight size={14} className="text-muted" />
             </button>
-
             {active && (
               <div className="absolute right-full top-0 z-50 mr-1 w-48 rounded-xl border border-border bg-card p-1.5 shadow-lg">
                 {cat.values.map((val) => {
@@ -143,120 +133,11 @@ function FilterPopover({ onClose }: { onClose: () => void }) {
   );
 }
 
-// --- Add Task modal ---------------------------------------------------
-
-const STATUS_OPTIONS: { value: TaskStatus; label: string }[] = [
-  { value: 'todo', label: 'To Do' },
-  { value: 'doing', label: 'Doing' },
-  { value: 'completed', label: 'Completed' },
-  { value: 'on_hold', label: 'On Hold' },
-];
-
-const PRIORITY_OPTIONS: { value: TaskPriority; label: string }[] = [
-  { value: 'no_priority', label: 'No Priority' },
-  { value: 'urgent', label: 'Urgent' },
-  { value: 'high', label: 'High' },
-  { value: 'medium', label: 'Medium' },
-  { value: 'low', label: 'Low' },
-];
-
-// defaultStatus is now an actual parameter of this function — this is the
-// fix for the ReferenceError. It was used on line 171 before but never
-// declared here.
-function AddTaskModal({ onClose, defaultStatus }: { onClose: () => void; defaultStatus?: TaskStatus }) {
-  const { createTaskHandler } = useTaskActions();
-  const [title, setTitle] = useState('');
-  const [status, setStatus] = useState<TaskStatus>(defaultStatus ?? 'todo');
-  const [priority, setPriority] = useState<TaskPriority>('no_priority');
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function handleSubmit() {
-    if (!title.trim()) {
-      setError('Title is required.');
-      return;
-    }
-    if (!createTaskHandler) {
-      setError('Task creation isn\u2019t available right now — try reopening from the Tasks page.');
-      return;
-    }
-    setSubmitting(true);
-    setError(null);
-    try {
-      await createTaskHandler({ title: title.trim(), status, priority });
-      onClose();
-    } catch {
-      setError('Could not create the task. Is the API running?');
-      setSubmitting(false);
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
-      <div onClick={(e) => e.stopPropagation()} className="w-[420px] rounded-xl border border-border bg-card p-6 shadow-lg">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-foreground">New Task</h2>
-          <button onClick={onClose} className="text-muted hover:text-foreground" aria-label="Close">
-            <X size={16} />
-          </button>
-        </div>
-
-        <input
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder="Task title..."
-          autoFocus
-          className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted"
-        />
-
-        <div className="mt-3 flex gap-2">
-          <select
-            value={status}
-            onChange={(e) => setStatus(e.target.value as TaskStatus)}
-            className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none"
-          >
-            {STATUS_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
-            ))}
-          </select>
-
-          <select
-            value={priority}
-            onChange={(e) => setPriority(e.target.value as TaskPriority)}
-            className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none"
-          >
-            {PRIORITY_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
-            ))}
-          </select>
-        </div>
-
-        {error && <p className="mt-3 text-xs text-destructive">{error}</p>}
-
-        <div className="mt-4 flex justify-end gap-2">
-          <button onClick={onClose} className="rounded-full border border-border px-4 py-2 text-sm text-foreground hover:bg-sidebar-active">
-            Cancel
-          </button>
-          <button
-            onClick={handleSubmit}
-            disabled={submitting}
-            className="rounded-full bg-cta-primary px-4 py-2 text-sm text-cta-primary-foreground disabled:opacity-60"
-          >
-            {submitting ? 'Creating…' : 'Create'}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// --- Topbar --------------------------------------------------------------
-
 export function Topbar() {
   const pathname = usePathname();
   const { collapsed, toggle } = useSidebar();
   const { title, breadcrumb, viewKey } = getPageMeta(pathname);
-  const { openAddTaskModal, registerOpenAddTaskModal } = useTaskActions();
+  const { registerOpenAddTaskModal } = useTaskActions();
 
   const [searchOpen, setSearchOpen] = useState(false);
   const [fieldsOpen, setFieldsOpen] = useState(false);
@@ -265,8 +146,6 @@ export function Topbar() {
   const [prefillStatus, setPrefillStatus] = useState<TaskStatus | undefined>(undefined);
   const searchRef = useRef<HTMLInputElement>(null);
 
-  // Lets Board's per-column "+" buttons trigger THIS modal with a status
-  // pre-selected, since Board has no direct access to Topbar's state.
   useEffect(() => {
     registerOpenAddTaskModal((status) => {
       setPrefillStatus(status);
@@ -342,10 +221,7 @@ export function Topbar() {
         </div>
 
         <button
-          onClick={() => {
-            setPrefillStatus(undefined); // generic Add Task — no column context
-            setAddTaskOpen(true);
-          }}
+          onClick={() => { setPrefillStatus(undefined); setAddTaskOpen(true); }}
           className="flex items-center gap-1 rounded-full bg-cta-primary px-4 py-1.5 text-sm font-medium text-cta-primary-foreground"
         >
           <Plus size={14} />
@@ -354,10 +230,7 @@ export function Topbar() {
       </header>
 
       {addTaskOpen && (
-        <AddTaskModal
-          onClose={() => setAddTaskOpen(false)}
-          defaultStatus={prefillStatus}
-        />
+        <AddTaskPanel defaultStatus={prefillStatus} onClose={() => setAddTaskOpen(false)} />
       )}
     </>
   );

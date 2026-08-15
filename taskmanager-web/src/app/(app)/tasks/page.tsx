@@ -33,9 +33,6 @@ export default function TasksPage() {
 
     async function init() {
       let project = activeProject;
-      // No active project yet (first load, or localStorage not read yet) —
-      // auto-pick the first project so the user is never stuck. Every
-      // guest gets one for free on login, so this always resolves.
       if (!project) {
         const projects = await fetchProjects();
         if (projects.length === 0) {
@@ -45,7 +42,7 @@ export default function TasksPage() {
         }
         project = { id: projects[0].id, name: projects[0].name };
         setActiveProject(project);
-        return; // effect re-runs once activeProject updates below
+        return;
       }
       try {
         const loaded = await fetchTasks(project.id);
@@ -61,10 +58,17 @@ export default function TasksPage() {
   }, [activeProject?.id, router]);
 
   useEffect(() => {
-    if (!activeProject) return;
-    setCreateTaskHandler(async (input: CreateTaskInput) => {
-      const created = await createTask(activeProject.id, input);
-      setTasks((prev) => [...prev, created]);
+    // projectId now comes from the CALLER (AddTaskPanel's own selector),
+    // not from this closure — so creating a task under a different project
+    // than the one currently open works correctly.
+    setCreateTaskHandler(async (projectId: string, input: CreateTaskInput) => {
+      const created = await createTask(projectId, input);
+      if (created.projectId === activeProject?.id) {
+        setTasks((prev) => [...prev, created]);
+      }
+      // else: created successfully in a different project, just not shown
+      // on this board — correct behavior, not a bug.
+      return created;
     });
     return () => setCreateTaskHandler(null);
   }, [setCreateTaskHandler, activeProject]);
@@ -96,9 +100,7 @@ export default function TasksPage() {
 
   return (
     <div className="h-full">
-      {error && (
-        <p className="mb-3 rounded-lg bg-date-overdue-bg px-3 py-2 text-xs text-date-overdue">{error}</p>
-      )}
+      {error && <p className="mb-3 rounded-lg bg-date-overdue-bg px-3 py-2 text-xs text-date-overdue">{error}</p>}
 
       {activeProject && (
         <p className="mb-3 text-xs text-muted">
