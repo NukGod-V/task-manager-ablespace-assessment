@@ -7,22 +7,22 @@ import { GripVertical, Plus, MoreHorizontal } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { TaskCard } from './task-card';
 import type { KanbanColumn, MockTask } from '@/types/task';
+import type { FieldVisibility } from '@/lib/task-fields';
 
 interface ColumnProps {
   column: KanbanColumn;
   tasks: MockTask[];
+  visibleFields: FieldVisibility;
   onOpenTask: (taskId: string) => void;
-  onAddTask: () => void; // NEW
+  onAddTask: () => void;
 }
 
-export function Column({ column, tasks, onOpenTask, onAddTask }: ColumnProps) {
+export function Column({ column, tasks, visibleFields, onOpenTask, onAddTask }: ColumnProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: column.id,
     data: { type: 'column' },
   });
 
-  // Distinct id (was column.id — the actual bug). data.status lets task
-  // drag handlers resolve the target column without parsing strings.
   const { setNodeRef: setDropRef } = useDroppable({
     id: `${column.id}-dropzone`,
     data: { type: 'column-drop-area', status: column.id },
@@ -34,18 +34,10 @@ export function Column({ column, tasks, onOpenTask, onAddTask }: ColumnProps) {
     <div
       ref={setNodeRef}
       style={style}
-      className={cn(
-        'flex h-fit max-h-full w-[288px] shrink-0 flex-col rounded-xl bg-column-header',
-        isDragging && 'opacity-50',
-      )}
+      className={cn('flex h-fit max-h-full w-[288px] shrink-0 flex-col rounded-xl bg-column-header', isDragging && 'opacity-50')}
     >
       <div className="flex items-center gap-2 px-3 py-3">
-        <button
-          {...attributes}
-          {...listeners}
-          className="cursor-grab text-muted hover:text-foreground active:cursor-grabbing"
-          aria-label={`Reorder ${column.title} column`}
-        >
+        <button {...attributes} {...listeners} className="cursor-grab text-muted hover:text-foreground active:cursor-grabbing" aria-label={`Reorder ${column.title} column`}>
           <GripVertical size={16} />
         </button>
         <h3 className="flex-1 text-sm font-semibold text-foreground">{column.title}</h3>
@@ -61,7 +53,7 @@ export function Column({ column, tasks, onOpenTask, onAddTask }: ColumnProps) {
       <div ref={setDropRef} className="flex flex-col gap-2 overflow-y-auto px-2 pb-2">
         <SortableContext items={tasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
           {tasks.map((task) => (
-            <TaskCard key={task.id} task={task} onEdit={() => onOpenTask(task.id)} />
+            <TaskCard key={task.id} task={task} visibleFields={visibleFields} onEdit={() => onOpenTask(task.id)} />
           ))}
         </SortableContext>
 

@@ -9,6 +9,7 @@ import { INITIAL_COLUMNS } from '@/lib/kanban-columns';
 import { fetchTasks, createTask, updateTask, reorderTask, fetchProjects, type CreateTaskInput } from '@/lib/api';
 import { getAccessToken } from '@/lib/auth';
 import { useViewMode } from '@/components/layout/view-mode-context';
+import { useFields } from '@/components/layout/fields-context';
 import { useTaskActions } from '@/components/layout/task-actions-context';
 import { useActiveProject } from '@/components/providers/active-project-provider';
 import type { KanbanColumn, MockTask, TaskStatus } from '@/types/task';
@@ -16,6 +17,7 @@ import type { KanbanColumn, MockTask, TaskStatus } from '@/types/task';
 export default function TasksPage() {
   const router = useRouter();
   const [viewMode] = useViewMode('tasks');
+  const { fields: visibleFields } = useFields('tasks', viewMode);
   const { setCreateTaskHandler, openAddTaskModal } = useTaskActions();
   const { activeProject, setActiveProject } = useActiveProject();
 
@@ -58,16 +60,11 @@ export default function TasksPage() {
   }, [activeProject?.id, router]);
 
   useEffect(() => {
-    // projectId now comes from the CALLER (AddTaskPanel's own selector),
-    // not from this closure — so creating a task under a different project
-    // than the one currently open works correctly.
     setCreateTaskHandler(async (projectId: string, input: CreateTaskInput) => {
       const created = await createTask(projectId, input);
       if (created.projectId === activeProject?.id) {
         setTasks((prev) => [...prev, created]);
       }
-      // else: created successfully in a different project, just not shown
-      // on this board — correct behavior, not a bug.
       return created;
     });
     return () => setCreateTaskHandler(null);
@@ -112,6 +109,7 @@ export default function TasksPage() {
         <BoardBoundary
           columns={columns}
           tasks={tasks}
+          visibleFields={visibleFields}
           setColumns={setColumns}
           setTasks={setTasks}
           onOpenTask={setSelectedTaskId}
@@ -119,7 +117,7 @@ export default function TasksPage() {
           onTaskReordered={handleTaskReordered}
         />
       ) : (
-        <TaskListView columns={columns} tasks={tasks} onOpenTask={setSelectedTaskId} />
+        <TaskListView columns={columns} tasks={tasks} visibleFields={visibleFields} onOpenTask={setSelectedTaskId} />
       )}
 
       {selectedTask && (

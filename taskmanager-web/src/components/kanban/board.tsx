@@ -9,6 +9,7 @@ import { SortableContext, horizontalListSortingStrategy, sortableKeyboardCoordin
 import { Column } from './column';
 import { TaskCard } from './task-card';
 import type { KanbanColumn, MockTask, TaskStatus } from '@/types/task';
+import type { FieldVisibility } from '@/lib/task-fields';
 
 const collisionDetectionStrategy: CollisionDetection = (args) => {
   const activeType = args.active.data.current?.type;
@@ -20,6 +21,7 @@ const collisionDetectionStrategy: CollisionDetection = (args) => {
 export interface BoardProps {
   columns: KanbanColumn[];
   tasks: MockTask[];
+  visibleFields: FieldVisibility;
   setColumns: React.Dispatch<React.SetStateAction<KanbanColumn[]>>;
   setTasks: React.Dispatch<React.SetStateAction<MockTask[]>>;
   onOpenTask: (taskId: string) => void;
@@ -27,7 +29,9 @@ export interface BoardProps {
   onTaskReordered: (taskId: string, status: TaskStatus, position: number) => void;
 }
 
-  export function Board({ columns, tasks, setColumns, setTasks, onOpenTask, onAddTask, onTaskReordered }: BoardProps) {
+export function Board({
+  columns, tasks, visibleFields, setColumns, setTasks, onOpenTask, onAddTask, onTaskReordered,
+}: BoardProps) {
   const [activeType, setActiveType] = useState<'column' | 'task' | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
 
@@ -139,6 +143,7 @@ export interface BoardProps {
               key={column.id}
               column={column}
               tasks={tasksByColumn.get(column.id) ?? []}
+              visibleFields={visibleFields}
               onOpenTask={onOpenTask}
               onAddTask={() => onAddTask(column.id)}
             />
@@ -147,7 +152,7 @@ export interface BoardProps {
       </div>
 
       <DragOverlay>
-        {activeTask && <TaskCard task={activeTask} onEdit={() => {}} />}
+        {activeTask && <TaskCard task={activeTask} visibleFields={visibleFields} onEdit={() => {}} />}
         {activeColumn && (
           <div className="w-[288px] rounded-xl bg-column-header px-3 py-3 text-sm font-semibold text-foreground shadow-lg">
             {activeColumn.title}

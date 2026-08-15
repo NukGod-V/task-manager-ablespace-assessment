@@ -3,10 +3,12 @@
 import { useRef, useState } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { GripVertical, MoreHorizontal, CalendarDays, Tag, Pencil } from 'lucide-react';
+import { GripVertical, MoreHorizontal, CalendarDays, Tag, Pencil, SignalHigh } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useClickOutside } from '@/hooks/use-click-outside';
+import { PRIORITY_META, STATUS_META } from '@/lib/task-meta';
 import type { MockTask } from '@/types/task';
+import type { FieldVisibility } from '@/lib/task-fields';
 
 const AVATAR_GRADIENTS = [
   'from-violet-400 to-fuchsia-500',
@@ -32,10 +34,11 @@ function formatDate(dueDate: string) {
 
 interface TaskCardProps {
   task: MockTask;
-  onEdit: () => void; // the ONLY thing that opens the Task Detail modal now
+  visibleFields: FieldVisibility;
+  onEdit: () => void;
 }
 
-export function TaskCard({ task, onEdit }: TaskCardProps) {
+export function TaskCard({ task, visibleFields, onEdit }: TaskCardProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: task.id,
     data: { type: 'task', status: task.status },
@@ -43,19 +46,15 @@ export function TaskCard({ task, onEdit }: TaskCardProps) {
 
   const style = { transform: CSS.Transform.toString(transform), transition };
   const overdue = isOverdue(task.dueDate);
+  const priority = PRIORITY_META[task.priority];
+  const statusMeta = STATUS_META[task.status];
 
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   useClickOutside(menuRef, () => setMenuOpen(false));
 
   return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      // No onClick / cursor-pointer on the card body anymore — Edit is the
-      // only path into the detail view now.
-      className={cn('group rounded-lg border border-border bg-card p-4', isDragging && 'opacity-50')}
-    >
+    <div ref={setNodeRef} style={style} className={cn('group rounded-lg border border-border bg-card p-4', isDragging && 'opacity-50')}>
       <div className="flex items-start gap-2">
         <button
           {...attributes}
@@ -76,25 +75,37 @@ export function TaskCard({ task, onEdit }: TaskCardProps) {
           >
             <MoreHorizontal size={14} />
           </button>
-
           {menuOpen && (
             <div className="absolute right-0 top-full z-10 mt-1 w-32 rounded-xl border border-border bg-card p-1.5 shadow-lg">
               <button
-                onClick={() => {
-                  setMenuOpen(false);
-                  onEdit();
-                }}
+                onClick={() => { setMenuOpen(false); onEdit(); }}
                 className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm text-foreground hover:bg-sidebar-active"
               >
-                <Pencil size={13} />
-                Edit
+                <Pencil size={13} /> Edit
               </button>
             </div>
           )}
         </div>
       </div>
 
-      {task.assignee && (
+      {/* Priority — NEW: cards previously showed no priority indicator at all */}
+      {visibleFields.Priority && task.priority !== 'no_priority' && (
+        <div className={cn('mt-2 flex items-center gap-1 text-[11px] font-medium', priority.textColor)}>
+          <SignalHigh size={11} />
+          {priority.label}
+        </div>
+      )}
+
+      {/* Status — redundant with column placement on the Board, but the
+          Fields toggle covers it per spec, so it's honored here too. */}
+      {visibleFields.Status && (
+        <div className="mt-2 flex items-center gap-1.5 text-[11px] text-muted">
+          <span className={cn('h-1.5 w-1.5 rounded-full', statusMeta.dot)} />
+          {statusMeta.label}
+        </div>
+      )}
+
+      {visibleFields.Members && task.assignee && (
         <div className="mt-3 flex items-center gap-2">
           <div className={cn('flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-br text-[9px] font-medium text-white', gradientFor(task.assignee.name))}>
             {task.assignee.initials}
@@ -103,7 +114,7 @@ export function TaskCard({ task, onEdit }: TaskCardProps) {
         </div>
       )}
 
-      {task.labels.length > 0 && (
+      {visibleFields.Labels && task.labels.length > 0 && (
         <div className="mt-3 flex flex-wrap gap-1.5">
           {task.labels.map((label) => (
             <span key={label} className="flex items-center gap-1 rounded-full bg-chip-bg px-2 py-0.5 text-[11px] font-medium text-chip-text">
@@ -114,7 +125,11 @@ export function TaskCard({ task, onEdit }: TaskCardProps) {
         </div>
       )}
 
-      {task.dueDate && (
+      {visibleFields.Reporter && task.reporter && (
+        <p className="mt-2 text-[11px] text-muted">Reported by {task.reporter.name}</p>
+      )}
+
+      {visibleFields['Due Date'] && task.dueDate && (
         <div className={cn('mt-3 flex w-fit items-center gap-1 rounded-full px-2 py-0.5 text-[11px]', overdue ? 'bg-date-overdue-bg text-date-overdue' : 'text-muted')}>
           <CalendarDays size={11} />
           {formatDate(task.dueDate)}
