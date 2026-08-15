@@ -7,7 +7,7 @@ export interface ActiveProjectRef {
   name: string;
 }
 
-const STORAGE_KEY = 'activeProject';
+import { ACTIVE_PROJECT_STORAGE_KEY } from '@/lib/storage-keys';
 
 interface ActiveProjectContextValue {
   activeProject: ActiveProjectRef | null;
@@ -22,7 +22,7 @@ export function ActiveProjectProvider({ children }: { children: React.ReactNode 
   const [hydrated, setHydrated] = React.useState(false);
 
   React.useEffect(() => {
-    const stored = window.localStorage.getItem(STORAGE_KEY);
+    const stored = window.localStorage.getItem(ACTIVE_PROJECT_STORAGE_KEY);
     if (stored) {
       try {
         setActiveProjectState(JSON.parse(stored));
@@ -35,7 +35,7 @@ export function ActiveProjectProvider({ children }: { children: React.ReactNode 
 
   const setActiveProject = React.useCallback((project: ActiveProjectRef) => {
     setActiveProjectState(project);
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(project));
+    window.localStorage.setItem(ACTIVE_PROJECT_STORAGE_KEY, JSON.stringify(project));
   }, []);
 
   return (
