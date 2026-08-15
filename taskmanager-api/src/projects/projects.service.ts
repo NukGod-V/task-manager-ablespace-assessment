@@ -14,7 +14,7 @@ export class ProjectsService {
 
   async create(dto: CreateProjectDto, creator: User): Promise<Project> {
     const memberIds = new Set(dto.memberIds ?? []);
-    memberIds.add(creator.id); // creator is always a member
+    memberIds.add(creator.id);
 
     const project = this.projectRepository.create({
       name: dto.name,
@@ -22,7 +22,12 @@ export class ProjectsService {
       lead: creator,
       members: Array.from(memberIds).map((id) => ({ id }) as User),
     });
-    return this.projectRepository.save(project);
+    const saved = await this.projectRepository.save(project);
+
+    // save() only returns what was passed in for relations — the stub
+    // { id } objects above, not full User rows. Re-fetch so the response
+    // actually has usernames, same pattern addMember/removeMember already use.
+    return this.projectRepository.findOne({ where: { id: saved.id } }) as Promise<Project>;
   }
 
   // Only projects the user leads or is a member of — matches the
