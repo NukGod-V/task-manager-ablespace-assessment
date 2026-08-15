@@ -19,7 +19,7 @@ export default function TasksPage() {
   const [viewMode] = useViewMode('tasks');
   const { fields: visibleFields } = useFields('tasks', viewMode);
   const { setCreateTaskHandler, openAddTaskModal } = useTaskActions();
-  const { activeProject, setActiveProject } = useActiveProject();
+  const { activeProject, setActiveProject, hydrated } = useActiveProject();
 
   const [columns, setColumns] = useState<KanbanColumn[]>(INITIAL_COLUMNS);
   const [tasks, setTasks] = useState<MockTask[]>([]);
@@ -33,6 +33,12 @@ export default function TasksPage() {
       return;
     }
 
+    // THE FIX: wait for the provider to finish reading localStorage before
+    // deciding whether to auto-pick a project. Previously this ran on the
+    // pre-hydration render (activeProject still null), auto-selected the
+    // newest project, and overwrote whatever the user had actually chosen.
+    if (!hydrated) return;
+
     async function init() {
       let project = activeProject;
       if (!project) {
@@ -44,7 +50,7 @@ export default function TasksPage() {
         }
         project = { id: projects[0].id, name: projects[0].name };
         setActiveProject(project);
-        return;
+        return; // effect re-runs once activeProject updates
       }
       try {
         const loaded = await fetchTasks(project.id);
@@ -57,7 +63,7 @@ export default function TasksPage() {
     }
     init();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeProject?.id, router]);
+  }, [activeProject?.id, hydrated, router]);
 
   useEffect(() => {
     setCreateTaskHandler(async (projectId: string, input: CreateTaskInput) => {
@@ -93,7 +99,7 @@ export default function TasksPage() {
 
   const selectedTask = selectedTaskId ? tasks.find((t) => t.id === selectedTaskId) ?? null : null;
 
-  if (loading) return <p className="text-sm text-muted">Loading tasks…</p>;
+  if (!hydrated || loading) return <p className="text-sm text-muted">Loading tasks…</p>;
 
   return (
     <div className="h-full">

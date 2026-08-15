@@ -7,17 +7,10 @@ export const metadata: Metadata = {
   description: 'Task Management System built for the AbleSpace assessment',
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    // suppressHydrationWarning is required by next-themes: it sets the
-    // `class` attribute on <html> before React hydrates, which would
-    // otherwise trigger a (harmless but noisy) hydration warning.
     <html lang="en" suppressHydrationWarning>
-      <body>
+      <body suppressHydrationWarning>
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false}>
           <ColorModeProvider>{children}</ColorModeProvider>
         </ThemeProvider>
