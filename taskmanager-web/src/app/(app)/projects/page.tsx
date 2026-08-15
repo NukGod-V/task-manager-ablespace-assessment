@@ -81,10 +81,10 @@ export default function ProjectsPage() {
               {project.members.slice(0, 5).map((m) => (
                 <div
                   key={m.id}
-                  title={m.username}
+                  title={m.username ?? 'Unknown'}
                   className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-card bg-accent text-[10px] text-white"
                 >
-                  {m.username[0].toUpperCase()}
+                  {m.username?.[0]?.toUpperCase() ?? '?'}
                 </div>
               ))}
             </div>
