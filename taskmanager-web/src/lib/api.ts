@@ -81,7 +81,10 @@ function mapApiTaskToUi(task: ApiTask): MockTask {
           initials: task.assignee.username[0]?.toUpperCase() ?? '?',
         }
       : null,
-    labels: [], // no Label/TaskLabel table yet
+    labels: [],
+    reporter: task.owner
+      ? { name: task.owner.username, initials: task.owner.username[0]?.toUpperCase() ?? '?' }
+      : null,
   };
 }
 

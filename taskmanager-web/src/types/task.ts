@@ -1,11 +1,9 @@
-// Mirrors the Phase 1 NestJS Task entity's core fields exactly, so Phase 4
-// only means swapping the data source — not reshaping any component.
 export type TaskStatus = 'backlog' | 'todo' | 'doing' | 'completed' | 'on_hold';
 export type TaskPriority = 'no_priority' | 'urgent' | 'high' | 'medium' | 'low';
 
 export interface TaskAssignee {
   name: string;
-  role: string; // "Admin" / "Designer" / "QA Team" / "Security" — per spec's card examples
+  role: string;
   initials: string;
 }
 
@@ -16,11 +14,13 @@ export interface MockTask {
   status: TaskStatus;
   priority: TaskPriority;
   position: number;
-  // --- Not on the current backend Task entity yet (see chat note) ---
-  dueDate: string | null; // ISO date
+  dueDate: string | null;
   assignee: TaskAssignee | null;
   labels: string[];
   projectId?: string | null;
+  // NEW — populated from the task's owner (creator). "Reporter" and
+  // "owner" are the same person in this schema; no separate concept exists.
+  reporter?: { name: string; initials: string } | null;
 }
 
 export interface KanbanColumn {
