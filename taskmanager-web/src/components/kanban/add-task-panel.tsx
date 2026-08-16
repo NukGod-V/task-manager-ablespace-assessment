@@ -9,7 +9,7 @@ import { useClickOutside } from '@/hooks/use-click-outside';
 import { useTaskActions } from '@/components/layout/task-actions-context';
 import { useActiveProject } from '@/components/providers/active-project-provider';
 import { fetchProjects, type UiProject } from '@/lib/api';
-import { getStoredUser } from '@/lib/auth';
+import { getStoredUser, type AuthUser } from '@/lib/auth';
 import { STATUS_OPTIONS, PRIORITY_OPTIONS } from './task-detail';
 import type { TaskStatus, TaskPriority } from '@/types/task';
 
@@ -18,9 +18,6 @@ interface AddTaskPanelProps {
   onClose: () => void;
 }
 
-// Generic single-select popover reused for Status/Priority/Project/Assignee
-// below — avoids writing the same open/close/click-outside boilerplate 4
-// times.
 function SelectField<T extends string>({
   label,
   value,
@@ -37,7 +34,8 @@ function SelectField<T extends string>({
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useClickOutside(ref, () => setOpen(false));
-  const current = options.find((o) => o.value === value);
+  const safeOptions = options ?? []; // defensive — never trust the caller's array is populated yet
+  const current = safeOptions.find((o) => o.value === value);
 
   return (
     <div ref={ref} className="relative">
@@ -55,17 +53,21 @@ function SelectField<T extends string>({
       </button>
       {open && (
         <div className="absolute left-0 top-full z-20 mt-1 w-full max-h-64 overflow-y-auto rounded-xl border border-border bg-card p-1.5 shadow-lg">
-          {options.map((opt) => (
-            <button
-              key={opt.value}
-              onClick={() => { onChange(opt.value); setOpen(false); }}
-              className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-sm text-foreground hover:bg-sidebar-active"
-            >
-              {opt.leading}
-              <span className="flex-1 text-left">{opt.label}</span>
-              {value === opt.value && <Check size={14} className="text-accent" />}
-            </button>
-          ))}
+          {safeOptions.length === 0 ? (
+            <p className="px-2.5 py-2 text-xs text-muted">Nothing to select yet</p>
+          ) : (
+            safeOptions.map((opt) => (
+              <button
+                key={opt.value}
+                onClick={() => { onChange(opt.value); setOpen(false); }}
+                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-sm text-foreground hover:bg-sidebar-active"
+              >
+                {opt.leading}
+                <span className="flex-1 text-left">{opt.label}</span>
+                {value === opt.value && <Check size={14} className="text-accent" />}
+              </button>
+            ))
+          )}
         </div>
       )}
     </div>
@@ -75,12 +77,16 @@ function SelectField<T extends string>({
 export function AddTaskPanel({ defaultStatus, onClose }: AddTaskPanelProps) {
   const { createTaskHandler } = useTaskActions();
   const { activeProject } = useActiveProject();
-  const [currentUser, setCurrentUser] = useState<ReturnType<typeof getStoredUser>>(null);
-    useEffect(() => {
+
+  // getStoredUser() reads localStorage — must happen in an effect, not
+  // during render, or the server-render pass crashes/mismatches.
+  const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
+  useEffect(() => {
     setCurrentUser(getStoredUser());
   }, []);
 
   const [projects, setProjects] = useState<UiProject[]>([]);
+  const [projectsLoaded, setProjectsLoaded] = useState(false);
   const [projectId, setProjectId] = useState<string>(activeProject?.id ?? '');
   const selectedProject = projects.find((p) => p.id === projectId);
 
@@ -91,9 +97,6 @@ export function AddTaskPanel({ defaultStatus, onClose }: AddTaskPanelProps) {
   const [dueDate, setDueDate] = useState('');
   const [assigneeId, setAssigneeId] = useState<string>('');
 
-  // Local-only — no Label/Resource/Subtask table on the backend yet (see
-  // chat note). These exist in the UI so the form matches the reference
-  // layout, but nothing here survives past this component's lifetime.
   const [labels, setLabels] = useState<string[]>([]);
   const [labelInput, setLabelInput] = useState('');
   const [resources, setResources] = useState<{ id: string; name: string; url: string }[]>([]);
@@ -106,10 +109,13 @@ export function AddTaskPanel({ defaultStatus, onClose }: AddTaskPanelProps) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchProjects().then((list) => {
-      setProjects(list);
-      if (!projectId && list.length > 0) setProjectId(activeProject?.id ?? list[0].id);
-    });
+    fetchProjects()
+      .then((list) => {
+        setProjects(list);
+        if (!projectId && list.length > 0) setProjectId(activeProject?.id ?? list[0].id);
+      })
+      .catch(() => setError('Could not load your projects.'))
+      .finally(() => setProjectsLoaded(true));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -156,6 +162,7 @@ export function AddTaskPanel({ defaultStatus, onClose }: AddTaskPanelProps) {
         priority,
         dueDate: dueDate || undefined,
         assigneeId: assigneeId || undefined,
+        labels: labels.length > 0 ? labels : undefined, // NEW — now actually sent
       });
       onClose();
     } catch (err) {
@@ -172,11 +179,7 @@ export function AddTaskPanel({ defaultStatus, onClose }: AddTaskPanelProps) {
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/40" onClick={onClose}>
-      <div
-        onClick={(e) => e.stopPropagation()}
-        className="flex h-full w-[720px] max-w-full overflow-hidden bg-card shadow-lg"
-      >
-        {/* --- Left column --- */}
+      <div onClick={(e) => e.stopPropagation()} className="flex h-full w-[720px] max-w-full overflow-hidden bg-card shadow-lg">
         <div className="flex-1 overflow-y-auto border-r border-border p-6">
           <div className="mb-1 flex items-center gap-2 text-xs text-muted">
             <span>Tasks</span>
@@ -205,7 +208,6 @@ export function AddTaskPanel({ defaultStatus, onClose }: AddTaskPanelProps) {
             className="mt-2 w-full resize-none bg-transparent text-sm text-secondary outline-none placeholder:text-muted"
           />
 
-          {/* Properties: Project (required) + Due date */}
           <div className="mt-6">
             <p className="mb-2 text-xs font-medium text-muted">Properties</p>
             <div className="flex flex-wrap gap-2">
@@ -217,7 +219,7 @@ export function AddTaskPanel({ defaultStatus, onClose }: AddTaskPanelProps) {
                   onChange={setProjectId}
                   renderTrigger={
                     <span className="rounded-full border border-border px-2.5 py-1 text-xs text-foreground">
-                      {selectedProject?.name ?? 'Select project'}
+                      {selectedProject?.name ?? (projectsLoaded ? 'Select project' : 'Loading…')}
                     </span>
                   }
                 />
@@ -229,12 +231,11 @@ export function AddTaskPanel({ defaultStatus, onClose }: AddTaskPanelProps) {
                 className="rounded-full border border-border bg-card px-2.5 py-1 text-xs text-foreground outline-none"
               />
             </div>
-            {!projectId && (
+            {projectsLoaded && !projectId && (
               <p className="mt-1 text-xs text-destructive">Every task needs a project — pick one above.</p>
             )}
           </div>
 
-          {/* Labels — local-only, see chat note */}
           <div className="mt-4">
             <p className="mb-2 text-xs font-medium text-muted">Labels</p>
             <div className="flex flex-wrap items-center gap-1.5">
@@ -257,7 +258,6 @@ export function AddTaskPanel({ defaultStatus, onClose }: AddTaskPanelProps) {
             </div>
           </div>
 
-          {/* Resources — local-only */}
           <div className="mt-6">
             <p className="mb-2 text-xs font-medium text-muted">Resources</p>
             {resources.map((r) => (
@@ -288,7 +288,6 @@ export function AddTaskPanel({ defaultStatus, onClose }: AddTaskPanelProps) {
             </div>
           </div>
 
-          {/* Subtasks — local-only */}
           <div className="mt-6">
             <p className="mb-2 text-xs font-medium text-muted">
               Subtasks {subtasks.length > 0 && `${subtasks.filter((s) => s.done).length}/${subtasks.length} done`}
@@ -323,7 +322,6 @@ export function AddTaskPanel({ defaultStatus, onClose }: AddTaskPanelProps) {
             </div>
           </div>
 
-          {/* Comments — genuinely disabled, no task id exists yet */}
           <div className="mt-6">
             <p className="mb-2 text-xs font-medium text-muted">Comments</p>
             <div className="flex items-center gap-2 rounded-lg border border-dashed border-border px-3 py-3 text-xs text-muted">
@@ -333,7 +331,6 @@ export function AddTaskPanel({ defaultStatus, onClose }: AddTaskPanelProps) {
           </div>
         </div>
 
-        {/* --- Right column: Details --- */}
         <div className="flex w-[280px] shrink-0 flex-col p-6">
           <button
             onClick={handleCreate}
@@ -358,12 +355,7 @@ export function AddTaskPanel({ defaultStatus, onClose }: AddTaskPanelProps) {
               }))}
             />
 
-            <SelectField
-              label="Project"
-              value={projectId}
-              onChange={setProjectId}
-              options={projectOptions}
-            />
+            <SelectField label="Project" value={projectId} onChange={setProjectId} options={projectOptions} />
 
             <SelectField
               label="Priority"
@@ -376,12 +368,7 @@ export function AddTaskPanel({ defaultStatus, onClose }: AddTaskPanelProps) {
               }))}
             />
 
-            <SelectField
-              label="Members"
-              value={assigneeId}
-              onChange={setAssigneeId}
-              options={assigneeOptions}
-            />
+            <SelectField label="Members" value={assigneeId} onChange={setAssigneeId} options={assigneeOptions} />
 
             <div className="flex items-center justify-between rounded-lg px-2 py-2 text-sm">
               <span className="text-muted">Dates</span>
@@ -390,7 +377,6 @@ export function AddTaskPanel({ defaultStatus, onClose }: AddTaskPanelProps) {
               </span>
             </div>
 
-            {/* Reporter — read-only, always the creator; no separate concept exists */}
             <div className="flex items-center justify-between rounded-lg px-2 py-2 text-sm">
               <span className="text-muted">Reporter</span>
               <span className="text-foreground">{currentUser?.username ?? '—'}</span>

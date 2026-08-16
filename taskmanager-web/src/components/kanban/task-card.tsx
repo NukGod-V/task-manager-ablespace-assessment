@@ -18,8 +18,12 @@ const AVATAR_GRADIENTS = [
   'from-rose-400 to-pink-500',
 ];
 
-function gradientFor(name: string) {
-  const hash = name.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
+// Defensive: never trust assignee.name is populated, even though the
+// backend fix above should guarantee it going forward — a name-less
+// avatar shouldn't crash the whole board again if any edge case slips through.
+function gradientFor(name?: string | null) {
+  const safe = name && name.length > 0 ? name : '?';
+  const hash = safe.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
   return AVATAR_GRADIENTS[hash % AVATAR_GRADIENTS.length];
 }
 
@@ -54,15 +58,24 @@ export function TaskCard({ task, visibleFields, onEdit }: TaskCardProps) {
   const menuRef = useRef<HTMLDivElement>(null);
   useClickOutside(menuRef, () => setMenuOpen(false));
 
-  const showAssignee = visibleFields.Members && task.assignee;
-  const showDueDate = visibleFields['Due Date'] && task.dueDate;
+  const showAssignee = visibleFields.Members && !!task.assignee?.name;
+  const showDueDate = visibleFields['Due Date'] && !!task.dueDate;
 
   return (
-    <div ref={setNodeRef} style={style} className={cn('group rounded-lg border border-border bg-card p-4', isDragging && 'opacity-50')}>
+    <div
+      ref={setNodeRef}
+      style={style}
+      // Card body click now opens the detail panel — reversing the earlier
+      // "Edit only" restriction per your latest instruction. Edit in the
+      // ... menu still works too, both lead to the same panel.
+      onClick={onEdit}
+      className={cn('group cursor-pointer rounded-lg border border-border bg-card p-4', isDragging && 'opacity-50')}
+    >
       <div className="flex items-start gap-2">
         <button
           {...attributes}
           {...listeners}
+          onClick={(e) => e.stopPropagation()} // grabbing the handle shouldn't also open the panel
           className="mt-0.5 shrink-0 cursor-grab text-muted opacity-0 transition-opacity group-hover:opacity-100 active:cursor-grabbing"
           aria-label="Drag task"
         >
@@ -73,14 +86,14 @@ export function TaskCard({ task, visibleFields, onEdit }: TaskCardProps) {
 
         <div ref={menuRef} className="relative shrink-0">
           <button
-            onClick={() => setMenuOpen((o) => !o)}
+            onClick={(e) => { e.stopPropagation(); setMenuOpen((o) => !o); }}
             className="rounded p-0.5 text-muted opacity-0 transition-opacity hover:bg-sidebar-active group-hover:opacity-100"
             aria-label="Card menu"
           >
             <MoreHorizontal size={14} />
           </button>
           {menuOpen && (
-            <div className="absolute right-0 top-full z-10 mt-1 w-32 rounded-xl border border-border bg-card p-1.5 shadow-lg">
+            <div className="absolute right-0 top-full z-10 mt-1 w-32 rounded-xl border border-border bg-card p-1.5 shadow-lg" onClick={(e) => e.stopPropagation()}>
               <button
                 onClick={() => { setMenuOpen(false); onEdit(); }}
                 className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm text-foreground hover:bg-sidebar-active"
@@ -106,15 +119,14 @@ export function TaskCard({ task, visibleFields, onEdit }: TaskCardProps) {
         </div>
       )}
 
-      {/* Assignee (left) + Due date (right) on ONE row — matches image 2 */}
       {(showAssignee || showDueDate) && (
         <div className="mt-3 flex items-center gap-2">
-          {showAssignee && task.assignee && (
+          {showAssignee && (
             <div className="flex items-center gap-2">
-              <div className={cn('flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-br text-[9px] font-medium text-white', gradientFor(task.assignee.name))}>
-                {task.assignee.initials}
+              <div className={cn('flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-br text-[9px] font-medium text-white', gradientFor(task.assignee?.name))}>
+                {task.assignee?.initials ?? '?'}
               </div>
-              <span className="text-xs text-secondary">{task.assignee.role}</span>
+              <span className="text-xs text-secondary">{task.assignee?.role ?? 'Member'}</span>
             </div>
           )}
           {showDueDate && task.dueDate && (
