@@ -16,10 +16,9 @@ export interface MockTask {
   position: number;
   dueDate: string | null;
   assignee: TaskAssignee | null;
+  assigneeId?: string | null; // NEW — needed to pre-select the Members dropdown by id, not fragile name-matching
   labels: string[];
   projectId?: string | null;
-  // NEW — populated from the task's owner (creator). "Reporter" and
-  // "owner" are the same person in this schema; no separate concept exists.
   reporter?: { name: string; initials: string } | null;
 }
 
