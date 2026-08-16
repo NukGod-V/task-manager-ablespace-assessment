@@ -21,7 +21,7 @@ export function AddTaskPanel({ defaultStatus, onClose }: AddTaskPanelProps) {
   const { activeProject } = useActiveProject();
 
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
-  useEffect(() => { setCurrentUser(getStoredUser()); }, []);
+  const [assigneeInitialized, setAssigneeInitialized] = useState(false);
 
   const [projects, setProjects] = useState<UiProject[]>([]);
   const [projectsLoaded, setProjectsLoaded] = useState(false);
@@ -53,6 +53,13 @@ export function AddTaskPanel({ defaultStatus, onClose }: AddTaskPanelProps) {
       .finally(() => setProjectsLoaded(true));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (!assigneeInitialized && currentUser && selectedProject) {
+      setAssigneeId(currentUser.id); // default to self — "Unassigned" stays available in the list below
+      setAssigneeInitialized(true);
+    }
+  }, [currentUser, selectedProject, assigneeInitialized]);
 
   function addLabel() {
     const val = labelInput.trim();
@@ -91,7 +98,13 @@ export function AddTaskPanel({ defaultStatus, onClose }: AddTaskPanelProps) {
   }
 
   const projectOptions = projects.map((p) => ({ value: p.id, label: p.name }));
-  const assigneeOptions = [{ value: '', label: 'Unassigned' }, ...((selectedProject?.members ?? []).map((m) => ({ value: m.id, label: m.username })))];
+  const assigneeOptions = [
+    { value: '', label: 'Unassigned' },
+    ...((selectedProject?.members ?? []).map((m) => ({
+      value: m.id,
+      label: m.id === currentUser?.id ? 'You' : m.username, // matches the "You" labeling already used on the Projects page
+    }))),
+  ];
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/40" onClick={onClose}>
