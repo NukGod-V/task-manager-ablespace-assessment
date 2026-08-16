@@ -5,7 +5,10 @@ import { useRouter } from 'next/navigation';
 import { BoardBoundary } from '@/components/kanban/board-boundary';
 import { TaskListView } from '@/components/kanban/task-list-view';
 import { INITIAL_COLUMNS } from '@/lib/kanban-columns';
-import { fetchTasks, createTask, reorderTask, deleteTask, fetchProjects, type CreateTaskInput } from '@/lib/api';
+import {
+  fetchTasks, createTask, updateTask, reorderTask, deleteTask, fetchProjects,
+  type CreateTaskInput, type UpdateTaskInput,
+} from '@/lib/api';
 import { getAccessToken } from '@/lib/auth';
 import { useViewMode } from '@/components/layout/view-mode-context';
 import { useFields } from '@/components/layout/fields-context';
@@ -22,6 +25,7 @@ export default function TasksPage() {
 
   const [columns, setColumns] = useState<KanbanColumn[]>(INITIAL_COLUMNS);
   const [tasks, setTasks] = useState<MockTask[]>([]);
+  const [projectMembers, setProjectMembers] = useState<{ id: string; username: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -41,8 +45,10 @@ export default function TasksPage() {
         return;
       }
       try {
-        const loaded = await fetchTasks(project.id);
-        setTasks(loaded);
+        const [loadedTasks, allProjects] = await Promise.all([fetchTasks(project.id), fetchProjects()]);
+        setTasks(loadedTasks);
+        const matched = allProjects.find((p) => p.id === project!.id);
+        setProjectMembers(matched?.members ?? []); // NEW — powers the Members quick-select in List view
       } catch (err) {
         const message = err instanceof Error ? err.message : '';
         if (message.includes('403') || message.includes('404')) {
@@ -84,6 +90,35 @@ export default function TasksPage() {
     }
   }
 
+  // Backs the List view's inline "+" quick-edit cells (priority / member / date).
+  async function handleQuickUpdate(taskId: string, patch: UpdateTaskInput) {
+    const previous = tasks;
+    setTasks((prev) => prev.map((t) => {
+      if (t.id !== taskId) return t;
+      const next = { ...t };
+      if (patch.priority !== undefined) next.priority = patch.priority;
+      if (patch.dueDate !== undefined) next.dueDate = patch.dueDate;
+      if (patch.assigneeId !== undefined) {
+        if (!patch.assigneeId) {
+          next.assignee = null;
+          next.assigneeId = null;
+        } else {
+          const member = projectMembers.find((m) => m.id === patch.assigneeId);
+          next.assigneeId = patch.assigneeId;
+          if (member) next.assignee = { name: member.username, role: 'Member', initials: member.username[0]?.toUpperCase() ?? '?' };
+        }
+      }
+      return next;
+    }));
+    try {
+      const saved = await updateTask(taskId, patch);
+      setTasks((prev) => prev.map((t) => (t.id === saved.id ? saved : t)));
+    } catch {
+      setTasks(previous);
+      setError('Could not save that change.');
+    }
+  }
+
   function handleOpenTask(taskId: string) {
     router.push(`/tasks/${taskId}`);
   }
@@ -96,9 +131,30 @@ export default function TasksPage() {
       {activeProject && <p className="mb-3 text-xs text-muted">Project: <span className="font-medium text-foreground">{activeProject.name}</span></p>}
 
       {viewMode === 'board' ? (
-        <BoardBoundary columns={columns} tasks={tasks} visibleFields={visibleFields} setColumns={setColumns} setTasks={setTasks} onOpenTask={handleOpenTask} onDeleteTask={handleDeleteTask} onAddTask={openAddTaskModal} onTaskReordered={handleTaskReordered} />
+        <BoardBoundary
+          columns={columns}
+          tasks={tasks}
+          visibleFields={visibleFields}
+          setColumns={setColumns}
+          setTasks={setTasks}
+          onOpenTask={handleOpenTask}
+          onDeleteTask={handleDeleteTask}
+          onAddTask={openAddTaskModal}
+          onTaskReordered={handleTaskReordered}
+        />
       ) : (
-        <TaskListView columns={columns} tasks={tasks} visibleFields={visibleFields} onOpenTask={handleOpenTask} onDeleteTask={handleDeleteTask} />
+        <TaskListView
+          columns={columns}
+          tasks={tasks}
+          visibleFields={visibleFields}
+          projectMembers={projectMembers}
+          setTasks={setTasks}
+          onOpenTask={handleOpenTask}
+          onDeleteTask={handleDeleteTask}
+          onAddTask={openAddTaskModal}
+          onUpdateTask={handleQuickUpdate}
+          onTaskReordered={handleTaskReordered}
+        />
       )}
     </div>
   );
