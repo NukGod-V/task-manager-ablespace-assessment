@@ -49,6 +49,9 @@ export class Task {
   @Column({ type: 'date', nullable: true })
   dueDate: string | null;
 
+  @Column({ type: 'simple-array', nullable: true })
+  labels: string[] | null;
+
   // NEW — nullable + onDelete SET NULL: deleting a Project shouldn't
   // cascade-delete its Tasks, just orphan them back to no project.
   @ManyToOne(() => Project, (project) => project.tasks, {

@@ -37,4 +37,8 @@ export class CreateTaskDto {
   @IsOptional()
   @IsUUID()
   assigneeId?: string;
+
+  @IsOptional()
+  @IsString({ each: true })
+  labels?: string[];
 }

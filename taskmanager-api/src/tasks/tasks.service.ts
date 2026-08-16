@@ -15,15 +15,21 @@ export class TasksService {
     @InjectRepository(Project) private readonly projectRepository: Repository<Project>,
   ) {}
 
-  // Central membership check — tasks are now scoped to project membership,
-  // not just task ownership. This is the core of the PM/assignment model
-  // from the chat.
   private async assertProjectMember(projectId: string, userId: string): Promise<Project> {
     const project = await this.projectRepository.findOne({ where: { id: projectId } });
     if (!project) throw new NotFoundException(`Project ${projectId} not found`);
     const isMember = project.lead?.id === userId || project.members.some((m) => m.id === userId);
     if (!isMember) throw new ForbiddenException('You are not a member of this project');
     return project;
+  }
+
+  // Re-fetches by id after any save() that touched a relation set via a
+  // bare { id } stub — save() echoes back exactly what was passed in for
+  // relations, not the full hydrated row. Without this, assignee/project
+  // on the RESPONSE have only an id and no other fields (username, name,
+  // etc.), which is what crashed TaskCard reading assignee.name.
+  private async refetch(id: string): Promise<Task> {
+    return this.taskRepository.findOne({ where: { id } }) as Promise<Task>;
   }
 
   async create(dto: CreateTaskDto, ownerId: string): Promise<Task> {
@@ -35,11 +41,13 @@ export class TasksService {
       priority: dto.priority,
       position: dto.position ?? 0,
       dueDate: dto.dueDate ?? null,
+      labels: dto.labels ?? [],
       owner: { id: ownerId } as User,
       project,
       assignee: dto.assigneeId ? ({ id: dto.assigneeId } as User) : null,
     });
-    return this.taskRepository.save(task);
+    const saved = await this.taskRepository.save(task);
+    return this.refetch(saved.id); // THE FIX
   }
 
   async findAllForProject(projectId: string, userId: string): Promise<Task[]> {
@@ -71,14 +79,15 @@ export class TasksService {
     if (assigneeId !== undefined) {
       task.assignee = assigneeId ? ({ id: assigneeId } as User) : null;
     }
-    return this.taskRepository.save(task);
+    const saved = await this.taskRepository.save(task);
+    return this.refetch(saved.id); // THE FIX — same stub problem as create()
   }
 
   async reorder(id: string, dto: ReorderTaskDto, userId: string): Promise<Task> {
-    const task = await this.findOne(id, userId);
+    const task = await this.findOne(id, userId); // already fully hydrated from findOne
     task.status = dto.status;
     task.position = dto.position;
-    return this.taskRepository.save(task);
+    return this.taskRepository.save(task); // no stub relations touched here — safe as-is
   }
 
   async remove(id: string, userId: string): Promise<void> {
