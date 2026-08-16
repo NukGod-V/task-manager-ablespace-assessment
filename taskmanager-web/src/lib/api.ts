@@ -3,7 +3,6 @@ import type { MockTask, TaskStatus, TaskPriority } from '@/types/task';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
 
-// --- Raw shapes returned by the NestJS API ---
 interface ApiUser {
   id: string;
   username: string;
@@ -26,6 +25,7 @@ interface ApiTask {
   priority: string;
   position: number;
   dueDate: string | null;
+  labels: string[] | null;
   owner: ApiUser;
   assignee: ApiUser | null;
   project: ApiProject | null;
@@ -47,16 +47,12 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
     },
   });
   if (!res.ok) {
-    // NestJS's default error responses are JSON with a `message` field —
-    // surface that instead of just the status code, so failures like "not
-    // a project member" or a validation error are actually readable
-    // instead of collapsing into a generic "is the API running?" guess.
     let detail = '';
     try {
       const body = await res.json();
       detail = body?.message ? `: ${Array.isArray(body.message) ? body.message.join(', ') : body.message}` : '';
     } catch {
-      // response wasn't JSON — no extra detail available
+      // not JSON — no extra detail
     }
     throw new Error(`API ${options.method ?? 'GET'} ${path} failed (${res.status})${detail}`);
   }
@@ -64,17 +60,12 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
   return res.json();
 }
 
-// --- Auth ---
-
 export async function guestLogin(): Promise<GuestLoginResponse> {
   const res = await fetch(`${API_URL}/auth/guest`, { method: 'POST' });
   if (!res.ok) throw new Error(`Guest login failed: ${res.status}`);
   return res.json();
 }
 
-// --- Task shape adapter ---
-// No `role` field on User and no Label table yet on the backend, so those
-// parts of the UI's task shape get honest placeholders, not fake data.
 function mapApiTaskToUi(task: ApiTask): MockTask {
   return {
     id: task.id,
@@ -86,32 +77,23 @@ function mapApiTaskToUi(task: ApiTask): MockTask {
     dueDate: task.dueDate,
     projectId: task.project?.id ?? null,
     assignee: task.assignee
-      ? {
-          name: task.assignee.username,
-          role: 'Member', // no role field on User yet
-          initials: task.assignee.username[0]?.toUpperCase() ?? '?',
-        }
+      ? { name: task.assignee.username, role: 'Member', initials: task.assignee.username?.[0]?.toUpperCase() ?? '?' }
       : null,
-    labels: [],
+    labels: task.labels ?? [], // NEW — real data now, was always []
     reporter: task.owner
-      ? { name: task.owner.username, initials: task.owner.username[0]?.toUpperCase() ?? '?' }
+      ? { name: task.owner.username, initials: task.owner.username?.[0]?.toUpperCase() ?? '?' }
       : null,
   };
 }
 
-// --- Tasks ---
-// projectId is a SEPARATE parameter, not part of the input object below —
-// this is the split that caused your confusion. The page that calls
-// createTask() already knows the active project; the Add Task form itself
-// never needs to think about projectId at all.
-
 export interface CreateTaskInput {
   title: string;
-  status?: TaskStatus;
   description?: string;
+  status?: TaskStatus;
   priority?: TaskPriority;
   dueDate?: string;
   assigneeId?: string;
+  labels?: string[]; // NEW
 }
 
 export async function fetchTasks(projectId: string): Promise<MockTask[]> {
@@ -135,6 +117,7 @@ export interface UpdateTaskInput {
   dueDate?: string | null;
   projectId?: string | null;
   assigneeId?: string | null;
+  labels?: string[];
 }
 
 export async function updateTask(id: string, input: UpdateTaskInput): Promise<MockTask> {
@@ -156,8 +139,6 @@ export async function reorderTask(
   return mapApiTaskToUi(task);
 }
 
-// --- Projects ---
-
 export interface UiProject {
   id: string;
   name: string;
@@ -171,7 +152,7 @@ export async function fetchProjects(): Promise<UiProject[]> {
     id: p.id,
     name: p.name,
     lead: p.lead ? { id: p.lead.id, username: p.lead.username } : null,
-    members: p.members?.map((m) => ({ id: m.id, username: m.username })) ?? [],
+    members: (p.members ?? []).map((m) => ({ id: m.id, username: m.username })),
   }));
 }
 
@@ -184,11 +165,9 @@ export async function createProject(name: string, memberIds: string[] = []): Pro
     id: project.id,
     name: project.name,
     lead: project.lead ? { id: project.lead.id, username: project.lead.username } : null,
-    members: project.members?.map((m) => ({ id: m.id, username: m.username })) ?? [],
+    members: (project.members ?? []).map((m) => ({ id: m.id, username: m.username })),
   };
 }
-
-// --- Users ---
 
 export interface UiAppUser {
   id: string;

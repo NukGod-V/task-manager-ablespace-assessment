@@ -74,7 +74,7 @@
   /* Default accent — Figma shows "Blue" checked/active by default */
   --accent: 124 58 237;
 
-  --column-header: 249 250 251; /* #F9FAFB, per figma-extraction §1.1 */
+  --column-header: 243 244 246;
 }
 
 /* Dark equivalents — not present in Figma extraction (Light-only screenshots) */
@@ -99,7 +99,7 @@
   --destructive-bg: 69 10 10;
 
   /* inside .dark — inferred, not Figma-confirmed (same caveat as your other dark values) */
-  --column-header: 24 24 27;
+  --column-header: 30 30 33;
 }
 
 /* Color Mode presets (figma-extraction §2.9) — independent of light/dark */
