@@ -34,7 +34,7 @@ function formatDate(dueDate: string) {
 interface TaskCardProps {
   task: MockTask;
   visibleFields: FieldVisibility;
-  onOpen: () => void; // navigates to the full-screen detail page
+  onOpen: () => void;
   onDelete: () => void;
 }
 
@@ -53,8 +53,14 @@ export function TaskCard({ task, visibleFields, onOpen, onDelete }: TaskCardProp
   const menuRef = useRef<HTMLDivElement>(null);
   useClickOutside(menuRef, () => setMenuOpen(false));
 
-  const showAssignee = visibleFields.Members && !!task.assignee?.name;
+  const hasAssignee = !!task.assignee?.name;
+  const showAssignee = visibleFields.Members && hasAssignee;
   const showDueDate = visibleFields['Due Date'] && !!task.dueDate;
+  const showMetaRow = showAssignee || showDueDate;
+  const showPriority = visibleFields.Priority && task.priority !== 'no_priority';
+  const showStatus = visibleFields.Status;
+  const showLabels = visibleFields.Labels && task.labels.length > 0;
+  const showReporter = visibleFields.Reporter && task.reporter;
 
   function handleDeleteClick(e: React.MouseEvent) {
     e.stopPropagation();
@@ -88,51 +94,61 @@ export function TaskCard({ task, visibleFields, onOpen, onDelete }: TaskCardProp
         </div>
       </div>
 
-      {visibleFields.Priority && task.priority !== 'no_priority' && (
-        <div className={cn('mt-2 flex items-center gap-1 text-[11px] font-medium', priority.textColor)}>
-          <PriorityIcon level={priority.level} colorClass={priority.textColor} size={12} />
-          {priority.label}
-        </div>
-      )}
-
-      {visibleFields.Status && (
-        <div className="mt-2 flex items-center gap-1.5 text-[11px] text-muted">
-          <span className={cn('h-1.5 w-1.5 rounded-full', statusMeta.dot)} />
-          {statusMeta.label}
-        </div>
-      )}
-
-      {(showAssignee || showDueDate) && (
-        <div className="mt-3 flex items-center gap-2">
-          {showAssignee && (
-            <div className="flex items-center gap-2">
-              <div className={cn('flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-br text-[9px] font-medium text-white', gradientFor(task.assignee?.name))}>
-                {task.assignee?.initials ?? '?'}
-              </div>
-              <span className="text-xs text-secondary">{task.assignee?.role ?? 'Member'}</span>
+      {/* THE FIX: one gap-based container for everything below the title,
+          instead of independently-margined siblings. Spacing is now
+          identical whether 1 field is showing or all 5 — no more "empty
+          space" from a row that's mostly blank. */}
+      {(showPriority || showStatus || showMetaRow || showLabels || showReporter) && (
+        <div className="mt-2 flex flex-col gap-2">
+          {showPriority && (
+            <div className={cn('flex items-center gap-1 text-[11px] font-medium', priority.textColor)}>
+              <PriorityIcon level={priority.level} colorClass={priority.textColor} size={12} />
+              {priority.label}
             </div>
           )}
-          {showDueDate && task.dueDate && (
-            <div className={cn('ml-auto flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px]', overdue ? 'bg-date-overdue-bg text-date-overdue' : 'text-muted')}>
-              <CalendarDays size={11} />
-              {formatDate(task.dueDate)}
+
+          {showStatus && (
+            <div className="flex items-center gap-1.5 text-[11px] text-muted">
+              <span className={cn('h-1.5 w-1.5 rounded-full', statusMeta.dot)} />
+              {statusMeta.label}
             </div>
           )}
-        </div>
-      )}
 
-      {visibleFields.Labels && task.labels.length > 0 && (
-        <div className="mt-3 flex flex-wrap gap-1.5">
-          {task.labels.map((label) => (
-            <span key={label} className="flex items-center gap-1 rounded-full bg-chip-bg px-2 py-0.5 text-[11px] font-medium text-chip-text">
-              <Tag size={10} /> {label}
-            </span>
-          ))}
-        </div>
-      )}
+          {showMetaRow && (
+            <div className="flex items-center justify-between gap-2">
+              {showAssignee ? (
+                <div className="flex items-center gap-2">
+                  <div className={cn('flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-br text-[9px] font-medium text-white', gradientFor(task.assignee?.name))}>
+                    {task.assignee?.initials ?? '?'}
+                  </div>
+                  <span className="text-xs text-secondary">{task.assignee?.role ?? 'Member'}</span>
+                </div>
+              ) : (
+                <span /> // empty spacer so the date pill still sits right via justify-between, no ml-auto hack needed
+              )}
+              {showDueDate && task.dueDate && (
+                <div className={cn('flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px]', overdue ? 'bg-date-overdue-bg text-date-overdue' : 'text-muted')}>
+                  <CalendarDays size={11} />
+                  {formatDate(task.dueDate)}
+                </div>
+              )}
+            </div>
+          )}
 
-      {visibleFields.Reporter && task.reporter && (
-        <p className="mt-2 text-[11px] text-muted">Reported by {task.reporter.name}</p>
+          {showLabels && (
+            <div className="flex flex-wrap gap-1.5">
+              {task.labels.map((label) => (
+                <span key={label} className="flex items-center gap-1 rounded-full bg-chip-bg px-2 py-0.5 text-[11px] font-medium text-chip-text">
+                  <Tag size={10} /> {label}
+                </span>
+              ))}
+            </div>
+          )}
+
+          {showReporter && (
+            <p className="text-[11px] text-muted">Reported by {task.reporter!.name}</p>
+          )}
+        </div>
       )}
     </div>
   );
