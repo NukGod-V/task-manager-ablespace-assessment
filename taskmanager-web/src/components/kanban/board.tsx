@@ -25,13 +25,12 @@ export interface BoardProps {
   setColumns: React.Dispatch<React.SetStateAction<KanbanColumn[]>>;
   setTasks: React.Dispatch<React.SetStateAction<MockTask[]>>;
   onOpenTask: (taskId: string) => void;
+  onDeleteTask: (taskId: string) => void;
   onAddTask: (status: TaskStatus) => void;
   onTaskReordered: (taskId: string, status: TaskStatus, position: number) => void;
 }
 
-export function Board({
-  columns, tasks, visibleFields, setColumns, setTasks, onOpenTask, onAddTask, onTaskReordered,
-}: BoardProps) {
+export function Board({ columns, tasks, visibleFields, setColumns, setTasks, onOpenTask, onDeleteTask, onAddTask, onTaskReordered }: BoardProps) {
   const [activeType, setActiveType] = useState<'column' | 'task' | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
 
@@ -42,9 +41,7 @@ export function Board({
 
   const tasksByColumn = useMemo(() => {
     const map = new Map<TaskStatus, MockTask[]>();
-    for (const col of columns) {
-      map.set(col.id, tasks.filter((t) => t.status === col.id).sort((a, b) => a.position - b.position));
-    }
+    for (const col of columns) map.set(col.id, tasks.filter((t) => t.status === col.id).sort((a, b) => a.position - b.position));
     return map;
   }, [columns, tasks]);
 
@@ -99,18 +96,12 @@ export function Board({
         resolvedStatus = targetStatus;
         const overTaskId = overData?.type === 'task' ? (over.id as string) : null;
 
-        const columnIds = prev
-          .filter((t) => t.status === targetStatus)
-          .sort((a, b) => a.position - b.position)
-          .map((t) => t.id);
-
+        const columnIds = prev.filter((t) => t.status === targetStatus).sort((a, b) => a.position - b.position).map((t) => t.id);
         const oldIndex = columnIds.indexOf(active.id as string);
         const newIndex = overTaskId ? columnIds.indexOf(overTaskId) : columnIds.length - 1;
-
-        const reordered =
-          oldIndex === -1
-            ? [...columnIds, active.id as string]
-            : arrayMove(columnIds, oldIndex, newIndex === -1 ? columnIds.length - 1 : newIndex);
+        const reordered = oldIndex === -1
+          ? [...columnIds, active.id as string]
+          : arrayMove(columnIds, oldIndex, newIndex === -1 ? columnIds.length - 1 : newIndex);
 
         const positions = new Map(reordered.map((id, idx) => [id, idx * 1000]));
         finalPosition = positions.get(active.id as string) ?? activeTaskEntry.position;
@@ -122,42 +113,22 @@ export function Board({
         });
       });
 
-      if (resolvedStatus) {
-        onTaskReordered(active.id as string, resolvedStatus, finalPosition);
-      }
+      if (resolvedStatus) onTaskReordered(active.id as string, resolvedStatus, finalPosition);
     }
   }
 
   return (
-    <DndContext
-      sensors={sensors}
-      collisionDetection={collisionDetectionStrategy}
-      onDragStart={handleDragStart}
-      onDragOver={handleDragOver}
-      onDragEnd={handleDragEnd}
-    >
+    <DndContext sensors={sensors} collisionDetection={collisionDetectionStrategy} onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnd={handleDragEnd}>
       <div className="flex h-full gap-5 overflow-x-auto pb-2">
         <SortableContext items={columns.map((c) => c.id)} strategy={horizontalListSortingStrategy}>
           {columns.map((column) => (
-            <Column
-              key={column.id}
-              column={column}
-              tasks={tasksByColumn.get(column.id) ?? []}
-              visibleFields={visibleFields}
-              onOpenTask={onOpenTask}
-              onAddTask={() => onAddTask(column.id)}
-            />
+            <Column key={column.id} column={column} tasks={tasksByColumn.get(column.id) ?? []} visibleFields={visibleFields} onOpenTask={onOpenTask} onDeleteTask={onDeleteTask} onAddTask={() => onAddTask(column.id)} />
           ))}
         </SortableContext>
       </div>
-
       <DragOverlay>
-        {activeTask && <TaskCard task={activeTask} visibleFields={visibleFields} onEdit={() => {}} />}
-        {activeColumn && (
-          <div className="w-[288px] rounded-xl bg-column-header px-3 py-3 text-sm font-semibold text-foreground shadow-lg">
-            {activeColumn.title}
-          </div>
-        )}
+        {activeTask && <TaskCard task={activeTask} visibleFields={visibleFields} onOpen={() => {}} onDelete={() => {}} />}
+        {activeColumn && <div className="w-[288px] rounded-xl bg-column-header px-3 py-3 text-sm font-semibold text-foreground shadow-lg">{activeColumn.title}</div>}
       </DragOverlay>
     </DndContext>
   );

@@ -3,24 +3,19 @@
 import { useRef, useState } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { GripVertical, MoreHorizontal, CalendarDays, Tag, Pencil } from 'lucide-react';
+import { GripVertical, MoreHorizontal, CalendarDays, Tag, Pencil, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useClickOutside } from '@/hooks/use-click-outside';
 import { PRIORITY_META, STATUS_META } from '@/lib/task-meta';
+import { PriorityIcon } from '@/components/icons/priority-icon';
 import type { MockTask } from '@/types/task';
 import type { FieldVisibility } from '@/lib/task-fields';
 
 const AVATAR_GRADIENTS = [
-  'from-violet-400 to-fuchsia-500',
-  'from-sky-400 to-blue-500',
-  'from-emerald-400 to-teal-500',
-  'from-amber-400 to-orange-500',
-  'from-rose-400 to-pink-500',
+  'from-violet-400 to-fuchsia-500', 'from-sky-400 to-blue-500', 'from-emerald-400 to-teal-500',
+  'from-amber-400 to-orange-500', 'from-rose-400 to-pink-500',
 ];
 
-// Defensive: never trust assignee.name is populated, even though the
-// backend fix above should guarantee it going forward — a name-less
-// avatar shouldn't crash the whole board again if any edge case slips through.
 function gradientFor(name?: string | null) {
   const safe = name && name.length > 0 ? name : '?';
   const hash = safe.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
@@ -39,10 +34,11 @@ function formatDate(dueDate: string) {
 interface TaskCardProps {
   task: MockTask;
   visibleFields: FieldVisibility;
-  onEdit: () => void;
+  onOpen: () => void; // navigates to the full-screen detail page
+  onDelete: () => void;
 }
 
-export function TaskCard({ task, visibleFields, onEdit }: TaskCardProps) {
+export function TaskCard({ task, visibleFields, onOpen, onDelete }: TaskCardProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: task.id,
     data: { type: 'task', status: task.status },
@@ -52,7 +48,6 @@ export function TaskCard({ task, visibleFields, onEdit }: TaskCardProps) {
   const overdue = isOverdue(task.dueDate);
   const priority = PRIORITY_META[task.priority];
   const statusMeta = STATUS_META[task.status];
-  const PriorityIcon = priority.icon;
 
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -61,44 +56,32 @@ export function TaskCard({ task, visibleFields, onEdit }: TaskCardProps) {
   const showAssignee = visibleFields.Members && !!task.assignee?.name;
   const showDueDate = visibleFields['Due Date'] && !!task.dueDate;
 
+  function handleDeleteClick(e: React.MouseEvent) {
+    e.stopPropagation();
+    setMenuOpen(false);
+    if (window.confirm("Delete this task? This can't be undone.")) onDelete();
+  }
+
   return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      // Card body click now opens the detail panel — reversing the earlier
-      // "Edit only" restriction per your latest instruction. Edit in the
-      // ... menu still works too, both lead to the same panel.
-      onClick={onEdit}
-      className={cn('group cursor-pointer rounded-lg border border-border bg-card p-4', isDragging && 'opacity-50')}
-    >
+    <div ref={setNodeRef} style={style} onClick={onOpen} className={cn('group cursor-pointer rounded-lg border border-border bg-card p-4', isDragging && 'opacity-50')}>
       <div className="flex items-start gap-2">
-        <button
-          {...attributes}
-          {...listeners}
-          onClick={(e) => e.stopPropagation()} // grabbing the handle shouldn't also open the panel
-          className="mt-0.5 shrink-0 cursor-grab text-muted opacity-0 transition-opacity group-hover:opacity-100 active:cursor-grabbing"
-          aria-label="Drag task"
-        >
+        <button {...attributes} {...listeners} onClick={(e) => e.stopPropagation()} className="mt-0.5 shrink-0 cursor-grab text-muted opacity-0 transition-opacity group-hover:opacity-100 active:cursor-grabbing" aria-label="Drag task">
           <GripVertical size={14} />
         </button>
 
         <p className="flex-1 text-sm font-medium text-foreground">{task.title}</p>
 
         <div ref={menuRef} className="relative shrink-0">
-          <button
-            onClick={(e) => { e.stopPropagation(); setMenuOpen((o) => !o); }}
-            className="rounded p-0.5 text-muted opacity-0 transition-opacity hover:bg-sidebar-active group-hover:opacity-100"
-            aria-label="Card menu"
-          >
+          <button onClick={(e) => { e.stopPropagation(); setMenuOpen((o) => !o); }} className="rounded p-0.5 text-muted opacity-0 transition-opacity hover:bg-sidebar-active group-hover:opacity-100" aria-label="Card menu">
             <MoreHorizontal size={14} />
           </button>
           {menuOpen && (
             <div className="absolute right-0 top-full z-10 mt-1 w-32 rounded-xl border border-border bg-card p-1.5 shadow-lg" onClick={(e) => e.stopPropagation()}>
-              <button
-                onClick={() => { setMenuOpen(false); onEdit(); }}
-                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm text-foreground hover:bg-sidebar-active"
-              >
+              <button onClick={() => { setMenuOpen(false); onOpen(); }} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm text-foreground hover:bg-sidebar-active">
                 <Pencil size={13} /> Edit
+              </button>
+              <button onClick={handleDeleteClick} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm text-destructive hover:bg-sidebar-active">
+                <Trash2 size={13} /> Delete
               </button>
             </div>
           )}
@@ -107,7 +90,7 @@ export function TaskCard({ task, visibleFields, onEdit }: TaskCardProps) {
 
       {visibleFields.Priority && task.priority !== 'no_priority' && (
         <div className={cn('mt-2 flex items-center gap-1 text-[11px] font-medium', priority.textColor)}>
-          {PriorityIcon && <PriorityIcon size={12} />}
+          <PriorityIcon level={priority.level} colorClass={priority.textColor} size={12} />
           {priority.label}
         </div>
       )}
@@ -142,8 +125,7 @@ export function TaskCard({ task, visibleFields, onEdit }: TaskCardProps) {
         <div className="mt-3 flex flex-wrap gap-1.5">
           {task.labels.map((label) => (
             <span key={label} className="flex items-center gap-1 rounded-full bg-chip-bg px-2 py-0.5 text-[11px] font-medium text-chip-text">
-              <Tag size={10} />
-              {label}
+              <Tag size={10} /> {label}
             </span>
           ))}
         </div>
