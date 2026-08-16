@@ -21,11 +21,10 @@ export function AddTaskPanel({ defaultStatus, onClose }: AddTaskPanelProps) {
   const { activeProject } = useActiveProject();
 
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
-  const [assigneeInitialized, setAssigneeInitialized] = useState(false);
-
   const [projects, setProjects] = useState<UiProject[]>([]);
   const [projectsLoaded, setProjectsLoaded] = useState(false);
   const [projectId, setProjectId] = useState<string>(activeProject?.id ?? '');
+
   const selectedProject = projects.find((p) => p.id === projectId);
 
   const [title, setTitle] = useState('');
@@ -33,7 +32,7 @@ export function AddTaskPanel({ defaultStatus, onClose }: AddTaskPanelProps) {
   const [status, setStatus] = useState<TaskStatus>(defaultStatus ?? 'todo');
   const [priority, setPriority] = useState<TaskPriority>('no_priority');
   const [dueDate, setDueDate] = useState('');
-  const [assigneeId, setAssigneeId] = useState<string>('');
+  const [assigneeId, setAssigneeId] = useState<string>(''); // We will initialize this in the effect
 
   const [labels, setLabels] = useState<string[]>([]);
   const [labelInput, setLabelInput] = useState('');
@@ -47,19 +46,27 @@ export function AddTaskPanel({ defaultStatus, onClose }: AddTaskPanelProps) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    // 1. Fetch and set the current user, then immediately default the assignee to themselves
+    const user = getStoredUser();
+    if (user) {
+      setCurrentUser(user);
+      setAssigneeId(user.id);
+    } else {
+      setAssigneeId(''); // Fallback to unassigned
+    }
+
+    // 2. Fetch projects
     fetchProjects()
-      .then((list) => { setProjects(list); if (!projectId && list.length > 0) setProjectId(activeProject?.id ?? list[0].id); })
+      .then((list) => {
+        setProjects(list);
+        if (!projectId && list.length > 0) {
+          setProjectId(activeProject?.id ?? list[0].id);
+        }
+      })
       .catch(() => setError('Could not load your projects.'))
       .finally(() => setProjectsLoaded(true));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  useEffect(() => {
-    if (!assigneeInitialized && currentUser && selectedProject) {
-      setAssigneeId(currentUser.id); // default to self — "Unassigned" stays available in the list below
-      setAssigneeInitialized(true);
-    }
-  }, [currentUser, selectedProject, assigneeInitialized]);
 
   function addLabel() {
     const val = labelInput.trim();
