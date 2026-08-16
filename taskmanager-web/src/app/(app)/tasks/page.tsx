@@ -48,7 +48,7 @@ export default function TasksPage() {
         }
         project = { id: projects[0].id, name: projects[0].name };
         setActiveProject(project);
-        return; // effect re-runs once activeProject updates
+        return;
       }
 
       try {
@@ -56,17 +56,18 @@ export default function TasksPage() {
         setTasks(loaded);
       } catch (err) {
         const message = err instanceof Error ? err.message : '';
-        // Self-heal: a stale/invalid project reference (the exact bug this
-        // fix targets) shouldn't leave the user permanently stuck — fall
-        // back to a project they're actually a member of.
-        if (message.includes('403')) {
+        // Self-heal for BOTH 403 (not a member) and 404 (project no longer
+        // exists — e.g. stale localStorage from an earlier dev DB reset).
+        if (message.includes('403') || message.includes('404')) {
           const projects = await fetchProjects();
           if (projects.length > 0) {
             setActiveProject({ id: projects[0].id, name: projects[0].name });
             return;
           }
+          setError('No accessible projects found — create one from the Projects page.');
+        } else {
+          setError(message || 'Could not load tasks. Is the API running on :4000?');
         }
-        setError(message || 'Could not load tasks. Is the API running on :4000?');
       } finally {
         setLoading(false);
       }
