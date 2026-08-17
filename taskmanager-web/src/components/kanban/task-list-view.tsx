@@ -1,9 +1,9 @@
 'use client';
 
-import {useRef, useState} from 'react';
+import { useRef, useState } from 'react';
 import {
-  DndContext, PointerSensor, KeyboardSensor, useSensor, useSensors, closestCenter,
-  type DragEndEvent,
+  DndContext, DragOverEvent, DragEndEvent, PointerSensor, KeyboardSensor,
+  useSensor, useSensors, closestCenter, useDroppable,
 } from '@dnd-kit/core';
 import {
   SortableContext, verticalListSortingStrategy, sortableKeyboardCoordinates, arrayMove, useSortable,
@@ -27,7 +27,7 @@ interface TaskListViewProps {
   tasks: MockTask[];
   visibleFields: FieldVisibility;
   projectMembers: ProjectMember[];
-  setTasks: React.Dispatch<React.SetStateAction<MockTask[]>>; // same setter Board already uses, for instant reorder feedback
+  setTasks: React.Dispatch<React.SetStateAction<MockTask[]>>;
   onOpenTask: (id: string) => void;
   onDeleteTask: (id: string) => void;
   onAddTask: (status: TaskStatus) => void;
@@ -39,8 +39,6 @@ function isOverdue(dueDate: string | null) {
   if (!dueDate) return false;
   return new Date(dueDate) < new Date(new Date().toDateString());
 }
-
-// Matches the reference exactly: "12 Sep 2026" — day, short month, full year.
 function formatDate(dueDate: string) {
   return new Date(dueDate).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
 }
@@ -59,88 +57,147 @@ export function TaskListView({
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
-  // Intra-group reordering only — Figma's own list view has no drag-and-drop
-  // at all (per your note), so this is an addition on top of spec, kept
-  // scoped to reordering within one status group rather than also handling
-  // cross-group moves (that's what the Board is for).
+  // THE FIX for cross-column drag: live-reparent the dragged task's status
+  // while hovering, same pattern Board already uses. Without this, dropping
+  // in a different group had nothing to reconcile — the task's status
+  // never actually changed.
+  function handleDragOver(event: DragOverEvent) {
+    const { active, over } = event;
+    if (!over) return;
+    const overStatus = over.data.current?.status as TaskStatus | undefined;
+    if (!overStatus) return;
+    const activeIdStr = active.id as string;
+    if (activeIdStr === over.id) return;
+    setTasks((prev) => {
+      const activeTask = prev.find((t) => t.id === activeIdStr);
+      if (!activeTask || activeTask.status === overStatus) return prev;
+      return prev.map((t) => (t.id === activeIdStr ? { ...t, status: overStatus } : t));
+    });
+  }
+
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
-    if (!over || active.id === over.id) return;
-
+    if (!over) return;
     const activeTask = tasks.find((t) => t.id === active.id);
-    const overTask = tasks.find((t) => t.id === over.id);
-    if (!activeTask || !overTask || activeTask.status !== overTask.status) return;
+    if (!activeTask) return;
+
+    const overData = over.data.current;
+    const targetStatus = (overData?.status as TaskStatus | undefined) ?? activeTask.status;
+    const overTaskId = overData?.type === 'task' ? (over.id as string) : null;
 
     const groupIds = tasks
-      .filter((t) => t.status === activeTask.status)
+      .filter((t) => t.status === targetStatus)
       .sort((a, b) => a.position - b.position)
       .map((t) => t.id);
 
     const oldIndex = groupIds.indexOf(active.id as string);
-    const newIndex = groupIds.indexOf(over.id as string);
-    const reordered = arrayMove(groupIds, oldIndex, newIndex);
-    const positions = new Map(reordered.map((id, idx) => [id, idx * 1000]));
-    const newPosition = positions.get(active.id as string)!;
+    const newIndex = overTaskId ? groupIds.indexOf(overTaskId) : groupIds.length - 1;
+    const reordered = oldIndex === -1
+      ? [...groupIds, active.id as string]
+      : arrayMove(groupIds, oldIndex, newIndex === -1 ? groupIds.length - 1 : newIndex);
 
-    // Same pattern Board uses: update local state immediately for instant
-    // visual feedback, THEN fire the persistence call.
-    setTasks((prev) => prev.map((t) => (positions.has(t.id) ? { ...t, position: positions.get(t.id)! } : t)));
-    onTaskReordered(active.id as string, activeTask.status, newPosition);
+    const positions = new Map(reordered.map((id, idx) => [id, idx * 1000]));
+    const finalPosition = positions.get(active.id as string)!;
+
+    setTasks((prev) => prev.map((t) => {
+      if (t.id === active.id) return { ...t, status: targetStatus, position: finalPosition };
+      if (positions.has(t.id)) return { ...t, position: positions.get(t.id)! };
+      return t;
+    }));
+    onTaskReordered(active.id as string, targetStatus, finalPosition);
   }
 
   return (
-    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragOver={handleDragOver} onDragEnd={handleDragEnd}>
       <div className="flex flex-col gap-5">
-        {columns.map((column) => {
-          const columnTasks = tasks.filter((t) => t.status === column.id).sort((a, b) => a.position - b.position);
-          const collapsed = collapsedGroups.includes(column.id);
-
-          return (
-            <div key={column.id}>
-              <button onClick={() => toggleGroup(column.id)} className="mb-1.5 flex items-center gap-1.5 px-1 py-1 text-sm font-medium text-foreground">
-                {collapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
-                {column.title}
-                <span className="text-xs font-normal text-muted">{columnTasks.length}</span>
-              </button>
-
-              {!collapsed && (
-                <div className="overflow-hidden rounded-xl border border-border">
-                  <div className="flex items-center gap-3 border-b border-border bg-sidebar px-4 py-2.5 text-xs font-medium text-muted">
-                    <span className="w-5" />
-                    <span className="flex-1">Task</span>
-                    {visibleFields.Status && <span className="w-24">Status</span>}
-                    {visibleFields.Priority && <span className="w-28">Priority</span>}
-                    {visibleFields.Members && <span className="w-20">Members</span>}
-                    {visibleFields['Due Date'] && <span className="w-32">Due Date</span>}
-                    {visibleFields.Labels && <span className="w-32">Labels</span>}
-                    {visibleFields.Reporter && <span className="w-32">Reporter</span>}
-                    <span className="w-12">Actions</span>
-                  </div>
-
-                  <SortableContext items={columnTasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
-                    {columnTasks.map((task) => (
-                      <TaskRow
-                        key={task.id}
-                        task={task}
-                        visibleFields={visibleFields}
-                        projectMembers={projectMembers}
-                        onOpen={() => onOpenTask(task.id)}
-                        onDelete={() => onDeleteTask(task.id)}
-                        onUpdate={(patch) => onUpdateTask(task.id, patch)}
-                      />
-                    ))}
-                  </SortableContext>
-
-                  <button onClick={() => onAddTask(column.id)} className="flex items-center gap-1.5 px-4 py-3 text-left text-xs text-muted hover:bg-sidebar-active hover:text-foreground">
-                    <Plus size={13} /> Add Task
-                  </button>
-                </div>
-              )}
-            </div>
-          );
-        })}
+        {columns.map((column) => (
+          <TaskGroup
+            key={column.id}
+            column={column}
+            tasks={tasks.filter((t) => t.status === column.id).sort((a, b) => a.position - b.position)}
+            visibleFields={visibleFields}
+            projectMembers={projectMembers}
+            collapsed={collapsedGroups.includes(column.id)}
+            onToggle={() => toggleGroup(column.id)}
+            onOpenTask={onOpenTask}
+            onDeleteTask={onDeleteTask}
+            onAddTask={() => onAddTask(column.id)}
+            onUpdateTask={onUpdateTask}
+          />
+        ))}
       </div>
     </DndContext>
+  );
+}
+
+function TaskGroup({
+  column, tasks, visibleFields, projectMembers, collapsed, onToggle,
+  onOpenTask, onDeleteTask, onAddTask, onUpdateTask,
+}: {
+  column: KanbanColumn;
+  tasks: MockTask[];
+  visibleFields: FieldVisibility;
+  projectMembers: ProjectMember[];
+  collapsed: boolean;
+  onToggle: () => void;
+  onOpenTask: (id: string) => void;
+  onDeleteTask: (id: string) => void;
+  onAddTask: () => void;
+  onUpdateTask: (taskId: string, patch: UpdateTaskInput) => void;
+}) {
+  // Droppable zone so a group with ZERO tasks can still receive a drop —
+  // without this, dropping into an empty group had no target to hit.
+  const { setNodeRef: setDropRef } = useDroppable({
+    id: `${column.id}-list-dropzone`,
+    data: { type: 'column-drop-area', status: column.id },
+  });
+
+  return (
+    <div>
+      <button onClick={onToggle} className="mb-1.5 flex items-center gap-1.5 px-1 py-1 text-sm font-medium text-foreground">
+        {collapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
+        {column.title}
+        <span className="text-xs font-normal text-muted">{tasks.length}</span>
+      </button>
+
+      {!collapsed && (
+        // overflow-hidden REMOVED (was clipping popovers) — rounding now
+        // applied directly to the header and the trailing button instead.
+        <div className="rounded-xl border border-border">
+          <div className="flex items-center gap-3 rounded-t-xl border-b border-border bg-sidebar px-4 py-2.5 text-[13px] font-medium text-secondary">
+            <span className="w-5" />
+            <span className="flex-1">Task</span>
+            {visibleFields.Status && <span className="w-24">Status</span>}
+            {visibleFields.Priority && <span className="w-28">Priority</span>}
+            {visibleFields.Members && <span className="w-20">Members</span>}
+            {visibleFields['Due Date'] && <span className="w-32">Due Date</span>}
+            {visibleFields.Labels && <span className="w-32">Labels</span>}
+            {visibleFields.Reporter && <span className="w-32">Reporter</span>}
+            <span className="w-12">Actions</span>
+          </div>
+
+          <div ref={setDropRef}>
+            <SortableContext items={tasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
+              {tasks.map((task) => (
+                <TaskRow
+                  key={task.id}
+                  task={task}
+                  visibleFields={visibleFields}
+                  projectMembers={projectMembers}
+                  onOpen={() => onOpenTask(task.id)}
+                  onDelete={() => onDeleteTask(task.id)}
+                  onUpdate={(patch) => onUpdateTask(task.id, patch)}
+                />
+              ))}
+            </SortableContext>
+          </div>
+
+          <button onClick={onAddTask} className="flex w-full items-center gap-1.5 rounded-b-xl px-4 py-3 text-left text-xs text-muted hover:bg-sidebar-active hover:text-foreground">
+            <Plus size={13} /> Add Task
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -180,13 +237,7 @@ function TaskRow({
       onClick={onOpen}
       className={cn('group flex cursor-pointer items-center gap-3 border-b border-border px-4 py-3.5 text-sm last:border-b-0 hover:bg-sidebar-active/50', isDragging && 'opacity-50')}
     >
-      <button
-        {...attributes}
-        {...listeners}
-        onClick={(e) => e.stopPropagation()}
-        className="w-5 shrink-0 cursor-grab text-muted opacity-0 transition-opacity group-hover:opacity-100 active:cursor-grabbing"
-        aria-label="Drag to reorder"
-      >
+      <button {...attributes} {...listeners} onClick={(e) => e.stopPropagation()} className="w-5 shrink-0 cursor-grab text-muted opacity-0 transition-opacity group-hover:opacity-100 active:cursor-grabbing" aria-label="Drag to reorder">
         <GripVertical size={14} />
       </button>
 
@@ -217,11 +268,7 @@ function TaskRow({
             {(close) => (
               <>
                 {PRIORITY_OPTIONS.map((opt) => (
-                  <button
-                    key={opt.value}
-                    onClick={() => { onUpdate({ priority: opt.value as TaskPriority }); close(); }}
-                    className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-foreground hover:bg-sidebar-active"
-                  >
+                  <button key={opt.value} onClick={() => { onUpdate({ priority: opt.value as TaskPriority }); close(); }} className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-foreground hover:bg-sidebar-active">
                     {priorityLeading(opt)}
                     <span className="flex-1 text-left">{opt.label}</span>
                     {task.priority === opt.value && <Check size={13} className="text-accent" />}
@@ -276,15 +323,8 @@ function TaskRow({
           >
             {(close) => (
               <div className="flex flex-col gap-2">
-                <input
-                  type="date"
-                  defaultValue={task.dueDate ?? ''}
-                  onChange={(e) => { onUpdate({ dueDate: e.target.value || null }); close(); }}
-                  className="rounded-lg border border-border bg-background px-2 py-1.5 text-sm text-foreground outline-none"
-                />
-                {task.dueDate && (
-                  <button onClick={() => { onUpdate({ dueDate: null }); close(); }} className="text-left text-xs text-destructive hover:underline">Clear date</button>
-                )}
+                <input type="date" defaultValue={task.dueDate ?? ''} onChange={(e) => { onUpdate({ dueDate: e.target.value || null }); close(); }} className="rounded-lg border border-border bg-background px-2 py-1.5 text-sm text-foreground outline-none" />
+                {task.dueDate && <button onClick={() => { onUpdate({ dueDate: null }); close(); }} className="text-left text-xs text-destructive hover:underline">Clear date</button>}
               </div>
             )}
           </InlineQuickCell>
@@ -306,7 +346,9 @@ function TaskRow({
           <MoreHorizontal size={16} />
         </button>
         {menuOpen && (
-          <div className="absolute right-0 top-full z-10 mt-1 w-32 rounded-xl border border-border bg-card p-1.5 shadow-lg" onClick={(e) => e.stopPropagation()}>
+          // z-50, up from z-10 — the earlier value could lose to sibling
+          // rows' default paint order; this guarantees it's always on top.
+          <div className="absolute right-0 top-full z-50 mt-1 w-32 rounded-xl border border-border bg-card p-1.5 shadow-lg" onClick={(e) => e.stopPropagation()}>
             <button onClick={() => { setMenuOpen(false); onOpen(); }} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm text-foreground hover:bg-sidebar-active"><Pencil size={13} /> Edit</button>
             <button onClick={handleDelete} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm text-destructive hover:bg-sidebar-active"><Trash2 size={13} /> Delete</button>
           </div>

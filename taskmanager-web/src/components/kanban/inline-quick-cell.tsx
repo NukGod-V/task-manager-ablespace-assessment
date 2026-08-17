@@ -22,7 +22,7 @@ export function InlineQuickCell({
         {trigger}
       </button>
       {open && (
-        <div className={`absolute left-0 top-full z-20 mt-1 ${widthClass} rounded-xl border border-border bg-card p-2 shadow-lg`}>
+        <div className={`absolute left-0 top-full z-50 mt-1 ${widthClass} rounded-xl border border-border bg-card p-2 shadow-lg`}>
           {children(() => setOpen(false))}
         </div>
       )}
