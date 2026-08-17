@@ -23,11 +23,6 @@ export class TasksService {
     return project;
   }
 
-  // Re-fetches by id after any save() that touched a relation set via a
-  // bare { id } stub — save() echoes back exactly what was passed in for
-  // relations, not the full hydrated row. Without this, assignee/project
-  // on the RESPONSE have only an id and no other fields (username, name,
-  // etc.), which is what crashed TaskCard reading assignee.name.
   private async refetch(id: string): Promise<Task> {
     return this.taskRepository.findOne({ where: { id } }) as Promise<Task>;
   }
@@ -42,52 +37,48 @@ export class TasksService {
       position: dto.position ?? 0,
       dueDate: dto.dueDate ?? null,
       labels: dto.labels ?? [],
+      resources: dto.resources ?? [],
+      subtasks: dto.subtasks ?? [],
       owner: { id: ownerId } as User,
       project,
-      assignee: dto.assigneeId ? ({ id: dto.assigneeId } as User) : null,
+      assignees: (dto.assigneeIds ?? []).map((id) => ({ id }) as User),
     });
     const saved = await this.taskRepository.save(task);
-    return this.refetch(saved.id); // THE FIX
+    return this.refetch(saved.id);
   }
 
   async findAllForProject(projectId: string, userId: string): Promise<Task[]> {
     await this.assertProjectMember(projectId, userId);
-    return this.taskRepository.find({
-      where: { project: { id: projectId } },
-      order: { position: 'ASC' },
-    });
+    return this.taskRepository.find({ where: { project: { id: projectId } }, order: { position: 'ASC' } });
   }
 
   async findOne(id: string, userId: string): Promise<Task> {
     const task = await this.taskRepository.findOne({ where: { id } });
     if (!task) throw new NotFoundException(`Task ${id} not found`);
-    if (task.project) {
-      await this.assertProjectMember(task.project.id, userId);
-    } else if (task.owner.id !== userId) {
-      throw new ForbiddenException();
-    }
+    if (task.project) await this.assertProjectMember(task.project.id, userId);
+    else if (task.owner.id !== userId) throw new ForbiddenException();
     return task;
   }
 
   async update(id: string, dto: UpdateTaskDto, userId: string): Promise<Task> {
     const task = await this.findOne(id, userId);
-    const { projectId, assigneeId, ...rest } = dto;
-    Object.assign(task, rest);
+    const { projectId, assigneeIds, ...rest } = dto;
+    Object.assign(task, rest); // covers labels, resources, subtasks — plain columns, no stub issue
     if (projectId !== undefined) {
       task.project = projectId ? await this.assertProjectMember(projectId, userId) : null;
     }
-    if (assigneeId !== undefined) {
-      task.assignee = assigneeId ? ({ id: assigneeId } as User) : null;
+    if (assigneeIds !== undefined) {
+      task.assignees = assigneeIds.map((aid) => ({ id: aid }) as User);
     }
     const saved = await this.taskRepository.save(task);
-    return this.refetch(saved.id); // THE FIX — same stub problem as create()
+    return this.refetch(saved.id);
   }
 
   async reorder(id: string, dto: ReorderTaskDto, userId: string): Promise<Task> {
-    const task = await this.findOne(id, userId); // already fully hydrated from findOne
+    const task = await this.findOne(id, userId);
     task.status = dto.status;
     task.position = dto.position;
-    return this.taskRepository.save(task); // no stub relations touched here — safe as-is
+    return this.taskRepository.save(task);
   }
 
   async remove(id: string, userId: string): Promise<void> {
