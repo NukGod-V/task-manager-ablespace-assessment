@@ -15,6 +15,9 @@ import { useTaskActions } from './task-actions-context';
 import { AddTaskPanel } from '@/components/kanban/add-task-panel';
 import { TASK_FIELDS } from '@/lib/task-fields';
 import type { TaskStatus } from '@/types/task';
+import { useFilters } from './filter-context';
+import { STATUS_OPTIONS, PRIORITY_OPTIONS } from '@/lib/task-options';
+
 
 function getPageMeta(pathname: string) {
   if (pathname.startsWith('/projects')) return { title: 'Projects', breadcrumb: ['Projects'], viewKey: 'projects' };
@@ -61,57 +64,61 @@ function FieldsPopover({ viewKey, onClose }: { viewKey: string; onClose: () => v
   );
 }
 
-const FILTER_CATEGORIES = [
-  { key: 'status', label: 'Status', icon: CircleDot, values: ['Backlog', 'To Do', 'Doing', 'Completed', 'On Hold'] },
-  { key: 'priority', label: 'Priority', icon: SlidersHorizontal, values: ['No Priority', 'Urgent', 'High', 'Medium', 'Low'] },
-  { key: 'members', label: 'Members', icon: Users, values: ['Alex Chen', 'Priya Rao', 'Sam Torres', 'Nina Patel'] },
-  { key: 'dueDate', label: 'Due Date', icon: CalendarDays, values: ['Overdue', 'Due Today', 'Due This Week', 'No Date'] },
-  { key: 'teams', label: 'Teams', icon: UsersRound, values: ['No teams yet'] },
-  { key: 'labels', label: 'Labels', icon: Tag, values: ['Documentation', 'Development', 'Design', 'Deployment', 'Research', 'Testing'] },
-  { key: 'reporter', label: 'Reporter', icon: UserCircle, values: ['Alex Chen', 'Priya Rao', 'Sam Torres', 'Nina Patel'] },
-];
 
 function FilterPopover({ onClose }: { onClose: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
   useClickOutside(ref, onClose);
+  const { selections, toggle, clear, activeCount, options } = useFilters();
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
-  const [selections, setSelections] = useState<Record<string, string[]>>({});
 
-  function toggleValue(category: string, value: string) {
-    setSelections((prev) => {
-      const current = prev[category] ?? [];
-      const next = current.includes(value) ? current.filter((v) => v !== value) : [...current, value];
-      return { ...prev, [category]: next };
-    });
+  // Teams intentionally omitted — no Team entity exists anywhere in the
+  // schema, so a filter for it would either be fake or permanently empty.
+  const categories = [
+    { key: 'status', label: 'Status', icon: CircleDot, values: STATUS_OPTIONS.map((o) => o.label) },
+    { key: 'priority', label: 'Priority', icon: SlidersHorizontal, values: PRIORITY_OPTIONS.map((o) => o.label) },
+    { key: 'members', label: 'Members', icon: Users, values: options.members.map((m) => m.username), idFor: (label: string) => options.members.find((m) => m.username === label)?.id },
+    { key: 'dueDate', label: 'Due Date', icon: CalendarDays, values: ['Overdue', 'Due Today', 'Due This Week', 'No Date'] },
+    { key: 'labels', label: 'Labels', icon: Tag, values: options.labels },
+    { key: 'reporter', label: 'Reporter', icon: UserCircle, values: options.members.map((m) => m.username), idFor: (label: string) => options.members.find((m) => m.username === label)?.id },
+  ];
+
+  // Status/Priority use their internal enum VALUE for matching (task.status
+  // is 'todo', not 'To Do'), everything else stores the display value/id directly.
+  function valueForToggle(categoryKey: string, label: string): string {
+    if (categoryKey === 'status') return STATUS_OPTIONS.find((o) => o.label === label)?.value ?? label;
+    if (categoryKey === 'priority') return PRIORITY_OPTIONS.find((o) => o.label === label)?.value ?? label;
+    const cat = categories.find((c) => c.key === categoryKey);
+    return cat?.idFor?.(label) ?? label;
   }
 
   return (
     <div ref={ref} className="absolute right-0 top-full z-50 mt-1 w-52 rounded-xl border border-border bg-card p-1.5 shadow-lg">
-      {FILTER_CATEGORIES.map((cat) => {
+      {activeCount > 0 && (
+        <button onClick={clear} className="mb-1 flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-xs text-accent hover:bg-sidebar-active">
+          Clear all filters <span>{activeCount}</span>
+        </button>
+      )}
+      {categories.map((cat) => {
         const Icon = cat.icon;
         const active = activeCategory === cat.key;
         const count = selections[cat.key]?.length ?? 0;
         return (
           <div key={cat.key} className="relative" onMouseEnter={() => setActiveCategory(cat.key)} onMouseLeave={() => setActiveCategory(null)}>
-            <button
-              onClick={() => setActiveCategory(active ? null : cat.key)}
-              className={cn('flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-sm text-foreground', active ? 'bg-sidebar-active' : 'hover:bg-sidebar-active')}
-            >
+            <button onClick={() => setActiveCategory(active ? null : cat.key)} className={cn('flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-sm text-foreground', active ? 'bg-sidebar-active' : 'hover:bg-sidebar-active')}>
               <Icon size={14} className="text-muted" />
               <span className="flex-1 text-left">{cat.label}</span>
               {count > 0 && <span className="text-xs text-muted">{count}</span>}
               <ChevronRight size={14} className="text-muted" />
             </button>
             {active && (
-              <div className="absolute right-full top-0 z-50 mr-1 w-48 rounded-xl border border-border bg-card p-1.5 shadow-lg">
-                {cat.values.map((val) => {
-                  const selected = selections[cat.key]?.includes(val);
+              <div className="absolute right-full top-0 z-50 mr-1 max-h-64 w-48 overflow-y-auto rounded-xl border border-border bg-card p-1.5 shadow-lg">
+                {cat.values.length === 0 ? (
+                  <p className="px-2.5 py-2 text-xs text-muted">Nothing to filter by yet</p>
+                ) : cat.values.map((val) => {
+                  const toggleValue = valueForToggle(cat.key, val);
+                  const selected = selections[cat.key]?.includes(toggleValue);
                   return (
-                    <button
-                      key={val}
-                      onClick={() => toggleValue(cat.key, val)}
-                      className="flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-sm text-foreground hover:bg-sidebar-active"
-                    >
+                    <button key={val} onClick={() => toggle(cat.key, toggleValue)} className="flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-sm text-foreground hover:bg-sidebar-active">
                       {val}
                       {selected && <Check size={14} className="text-accent" />}
                     </button>
@@ -125,6 +132,55 @@ function FilterPopover({ onClose }: { onClose: () => void }) {
     </div>
   );
 }
+
+//   function toggleValue(category: string, value: string) {
+//     setSelections((prev) => {
+//       const current = prev[category] ?? [];
+//       const next = current.includes(value) ? current.filter((v) => v !== value) : [...current, value];
+//       return { ...prev, [category]: next };
+//     });
+//   }
+//
+//   return (
+//     <div ref={ref} className="absolute right-0 top-full z-50 mt-1 w-52 rounded-xl border border-border bg-card p-1.5 shadow-lg">
+//       {FILTER_CATEGORIES.map((cat) => {
+//         const Icon = cat.icon;
+//         const active = activeCategory === cat.key;
+//         const count = selections[cat.key]?.length ?? 0;
+//         return (
+//           <div key={cat.key} className="relative" onMouseEnter={() => setActiveCategory(cat.key)} onMouseLeave={() => setActiveCategory(null)}>
+//             <button
+//               onClick={() => setActiveCategory(active ? null : cat.key)}
+//               className={cn('flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-sm text-foreground', active ? 'bg-sidebar-active' : 'hover:bg-sidebar-active')}
+//             >
+//               <Icon size={14} className="text-muted" />
+//               <span className="flex-1 text-left">{cat.label}</span>
+//               {count > 0 && <span className="text-xs text-muted">{count}</span>}
+//               <ChevronRight size={14} className="text-muted" />
+//             </button>
+//             {active && (
+//               <div className="absolute right-full top-0 z-50 mr-1 w-48 rounded-xl border border-border bg-card p-1.5 shadow-lg">
+//                 {cat.values.map((val) => {
+//                   const selected = selections[cat.key]?.includes(val);
+//                   return (
+//                     <button
+//                       key={val}
+//                       onClick={() => toggleValue(cat.key, val)}
+//                       className="flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-sm text-foreground hover:bg-sidebar-active"
+//                     >
+//                       {val}
+//                       {selected && <Check size={14} className="text-accent" />}
+//                     </button>
+//                   );
+//                 })}
+//               </div>
+//             )}
+//           </div>
+//         );
+//       })}
+//     </div>
+//   );
+// }
 
 export function Topbar() {
   const pathname = usePathname();
