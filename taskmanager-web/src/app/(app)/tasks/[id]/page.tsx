@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
   ArrowLeft, Lock, Eye, Share2, MoreHorizontal, Maximize2, Minimize2,
-  Tag, X, Plus, Trash2, Link2, Send, Paperclip, Settings, Check, ChevronDown,
+  Tag, X, Plus, Trash2, Link2, Send, Paperclip, Settings, Check, ChevronDown, Copy,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useClickOutside } from '@/hooks/use-click-outside';
@@ -12,7 +12,7 @@ import { SelectField } from '@/components/ui/select-field';
 import { InlineQuickCell } from '@/components/kanban/inline-quick-cell';
 import { PriorityIcon } from '@/components/icons/priority-icon';
 import {
-  fetchTask, updateTask, deleteTask, fetchProjects, fetchComments, postComment,
+  fetchTask, updateTask, deleteTask, fetchProjects, fetchComments, postComment, createTask,
   type UiProject, type UiComment, type UpdateTaskInput,
 } from '@/lib/api';
 import { STATUS_OPTIONS, PRIORITY_OPTIONS, priorityLeading } from '@/lib/task-options';
@@ -48,8 +48,7 @@ export default function TaskDetailPage() {
   const [labels, setLabels] = useState<string[]>([]);
   const [labelInput, setLabelInput] = useState('');
 
-  // Local-only, session-scoped — no Resource/Subtask table on the backend
-  // yet. Functional while you're on this page; lost on navigating away.
+  // Persisted to task on change
   const [resources, setResources] = useState<LocalResource[]>([]);
   const [resourceName, setResourceName] = useState('');
   const [resourceUrl, setResourceUrl] = useState('');
@@ -61,8 +60,6 @@ export default function TaskDetailPage() {
   const [commentDraft, setCommentDraft] = useState('');
   const [postingComment, setPostingComment] = useState(false);
 
-  // Also local-only, per-task — NOT a project-wide log. Derived from real
-  // edits made in this session; doesn't persist past a reload.
   const [activity, setActivity] = useState<ActivityEntry[]>([]);
   function logActivity(text: string) {
     setActivity((prev) => [...prev, { id: crypto.randomUUID(), text, at: activityStamp() }]);
@@ -90,6 +87,8 @@ export default function TaskDetailPage() {
         setTitle(loadedTask.title);
         setDescription(loadedTask.description ?? '');
         setLabels(loadedTask.labels);
+        setResources(loadedTask.resources ?? []);
+        setSubtasks(loadedTask.subtasks ?? []);
         setProjects(loadedProjects);
         setComments(loadedComments);
       } catch (err) {
@@ -141,10 +140,18 @@ export default function TaskDetailPage() {
     saveField({ priority: value });
     logActivity(`You changed priority from ${fromLabel} to ${toLabel}`);
   }
-  function handleAssigneeChange(value: string) {
-    saveField({ assigneeId: value || null });
-    logActivity(value ? 'You changed the assignee' : 'You unassigned this task');
+
+  function toggleAssignee(userId: string) {
+    if (!task) return;
+    const has = task.assignees.some((a) => a.id === userId);
+    const next = has
+      ? task.assignees.filter((a) => a.id !== userId).map((a) => a.id)
+      : [...task.assignees.map((a) => a.id), userId];
+
+    saveField({ assigneeIds: next });
+    logActivity(has ? 'You removed an assignee' : 'You added an assignee');
   }
+
   function handleDueDateChange(value: string | null) {
     saveField({ dueDate: value });
     logActivity(value ? 'You updated the due date' : 'You cleared the due date');
@@ -173,17 +180,46 @@ export default function TaskDetailPage() {
 
   function addResource() {
     if (!resourceName.trim() || !resourceUrl.trim()) return;
-    setResources((prev) => [...prev, { id: crypto.randomUUID(), name: resourceName.trim(), url: resourceUrl.trim() }]);
-    setResourceName(''); setResourceUrl('');
+    const next = [...resources, { id: crypto.randomUUID(), name: resourceName.trim(), url: resourceUrl.trim() }];
+    setResources(next);
+    saveField({ resources: next });
+    setResourceName('');
+    setResourceUrl('');
   }
+
   function addSubtask() {
     const val = subtaskInput.trim();
     if (!val) return;
-    setSubtasks((prev) => [...prev, { id: crypto.randomUUID(), title: val, done: false, priority: 'no_priority', assigneeId: null, dueDate: null }]);
+    const next = [...subtasks, { id: crypto.randomUUID(), title: val, done: false, priority: 'no_priority' as TaskPriority, assigneeId: null, dueDate: null }];
+    setSubtasks(next);
+    saveField({ subtasks: next });
     setSubtaskInput('');
   }
+
   function updateSubtask(id: string, patch: Partial<LocalSubtask>) {
-    setSubtasks((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
+    const next = subtasks.map((s) => (s.id === id ? { ...s, ...patch } : s));
+    setSubtasks(next);
+    saveField({ subtasks: next });
+  }
+
+  async function handleDuplicate() {
+    if (!task || !currentProject) return;
+    try {
+      const copy = await createTask(currentProject.id, {
+        title: `${task.title} (Copy)`,
+        description: task.description ?? undefined,
+        status: task.status,
+        priority: task.priority,
+        dueDate: task.dueDate ?? undefined,
+        assigneeIds: task.assignees.map((a) => a.id),
+        labels: task.labels,
+        resources: resources,
+        subtasks: subtasks,
+      });
+      router.push(`/tasks/${copy.id}`);
+    } catch {
+      setError('Could not duplicate that task.');
+    }
   }
 
   async function handlePostComment() {
@@ -230,6 +266,7 @@ export default function TaskDetailPage() {
 
   const projectOptions = projects.map((p) => ({ value: p.id, label: p.name }));
   const memberOptions = currentProject?.members ?? [];
+  const assignedTaskMembers = task.assignees;
 
   const detailContent = (
     <>
@@ -248,6 +285,7 @@ export default function TaskDetailPage() {
             <button onClick={() => setMoreMenuOpen((o) => !o)} className="hover:text-foreground" aria-label="More options"><MoreHorizontal size={15} /></button>
             {moreMenuOpen && (
               <div className="absolute right-0 top-full z-50 mt-1 w-36 rounded-xl border border-border bg-card p-1.5 shadow-lg">
+                <button onClick={() => { setMoreMenuOpen(false); handleDuplicate(); }} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm text-foreground hover:bg-sidebar-active"><Copy size={13} /> Duplicate</button>
                 <button onClick={handleDelete} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm text-destructive hover:bg-sidebar-active"><Trash2 size={13} /> Delete Task</button>
               </div>
             )}
@@ -281,35 +319,37 @@ export default function TaskDetailPage() {
             className="mt-1.5 w-full resize-none bg-transparent text-sm leading-relaxed text-secondary outline-none placeholder:text-muted"
           />
 
-          {/* Properties: assignee + due date chips, label:content row layout matching Figma */}
           <div className="mt-6 flex items-center gap-4">
             <span className="w-24 shrink-0 text-sm font-medium text-secondary">Properties</span>
             <div className="flex flex-1 flex-wrap items-center gap-2">
-              <InlineQuickCell
-                trigger={
-                  task.assignee ? (
-                    <span className="flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1 text-xs text-foreground">
-                      <span className="flex h-4 w-4 items-center justify-center rounded-full bg-accent text-[8px] text-white">{task.assignee.initials}</span>
-                      {task.assignee.role}
-                    </span>
-                  ) : (
-                    <span className="flex items-center gap-1 rounded-full border border-dashed border-border px-2.5 py-1 text-xs text-muted"><Plus size={11} /> Assignee</span>
-                  )
-                }
-              >
-                {(close) => (
-                  <>
-                    <button onClick={() => { handleAssigneeChange(''); close(); }} className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-sm text-foreground hover:bg-sidebar-active">
-                      Unassigned {!task.assigneeId && <Check size={13} className="text-accent" />}
+              <div className="flex flex-wrap items-center gap-1.5">
+                {task.assignees.map((a) => (
+                  <span key={a.id} className="flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1 text-xs text-foreground">
+                    <span className="flex h-4 w-4 items-center justify-center rounded-full bg-accent text-[8px] text-white">{a.initials}</span>
+                    {a.name}
+                  </span>
+                ))}
+                <InlineQuickCell
+                  trigger={
+                    <button className="flex h-6 w-6 items-center justify-center rounded-full border border-dashed border-border text-muted hover:bg-sidebar-active">
+                      <Plus size={12} />
                     </button>
-                    {memberOptions.map((m) => (
-                      <button key={m.id} onClick={() => { handleAssigneeChange(m.id); close(); }} className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-sm text-foreground hover:bg-sidebar-active">
-                        {m.username} {task.assigneeId === m.id && <Check size={13} className="text-accent" />}
-                      </button>
-                    ))}
-                  </>
-                )}
-              </InlineQuickCell>
+                  }
+                >
+                  {() => (
+                    <>
+                      {memberOptions.map((m) => {
+                        const selected = task.assignees.some((a) => a.id === m.id);
+                        return (
+                          <button key={m.id} onClick={() => toggleAssignee(m.id)} className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-sm text-foreground hover:bg-sidebar-active">
+                            {m.username} {selected && <Check size={13} className="text-accent" />}
+                          </button>
+                        );
+                      })}
+                    </>
+                  )}
+                </InlineQuickCell>
+              </div>
 
               <InlineQuickCell
                 widthClass="w-56"
@@ -331,7 +371,6 @@ export default function TaskDetailPage() {
             </div>
           </div>
 
-          {/* Labels: row label on left, chips + add-input on right, same row */}
           <div className="mt-4 flex items-start gap-4">
             <span className="w-24 shrink-0 pt-1 text-sm font-medium text-secondary">Labels</span>
             <div className="flex flex-1 flex-wrap items-center gap-1.5">
@@ -354,7 +393,6 @@ export default function TaskDetailPage() {
             </div>
           </div>
 
-          {/* Resources: "Name : url", name is the clickable link, hover reveals delete */}
           <div className="mt-4 flex items-start gap-4">
             <span className="w-24 shrink-0 pt-1 text-sm font-medium text-secondary">Resources</span>
             <div className="flex-1">
@@ -363,7 +401,15 @@ export default function TaskDetailPage() {
                   <Link2 size={13} className="shrink-0 text-muted" />
                   <a href={r.url} target="_blank" rel="noopener noreferrer" className="font-medium text-accent underline">{r.name}</a>
                   <span className="truncate text-xs text-muted">: {r.url}</span>
-                  <button onClick={() => setResources((prev) => prev.filter((x) => x.id !== r.id))} className="text-muted opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100" aria-label="Remove resource">
+                  <button
+                    onClick={() => {
+                      const next = resources.filter((x) => x.id !== r.id);
+                      setResources(next);
+                      saveField({ resources: next });
+                    }}
+                    className="text-muted opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
+                    aria-label="Remove resource"
+                  >
                     <Trash2 size={13} />
                   </button>
                 </div>
@@ -376,7 +422,6 @@ export default function TaskDetailPage() {
             </div>
           </div>
 
-          {/* Subtasks — table matching reference columns, now with real Priority/Members/Due Date pickers */}
           <div className="mt-6">
             <button onClick={() => setSubtasksOpen((o) => !o)} className="mb-2 flex items-center gap-1.5 text-sm font-medium text-secondary">
               <ChevronDown size={13} className={cn('transition-transform', !subtasksOpen && '-rotate-90')} />
@@ -394,7 +439,7 @@ export default function TaskDetailPage() {
                 </div>
                 {subtasks.map((s) => {
                   const p = PRIORITY_META[s.priority];
-                  const assignedMember = memberOptions.find((m) => m.id === s.assigneeId);
+                  const assignedMember = assignedTaskMembers.find((m) => m.id === s.assigneeId);
                   return (
                     <div key={s.id} className="flex items-center gap-2 border-b border-border px-3 py-2 text-sm last:border-b-0">
                       <input type="checkbox" checked={s.done} onChange={() => updateSubtask(s.id, { done: !s.done })} className="h-3.5 w-3.5 accent-accent" />
@@ -418,14 +463,20 @@ export default function TaskDetailPage() {
 
                       <span className="w-16">
                         <InlineQuickCell trigger={
-                          assignedMember ? <div className="flex h-5 w-5 items-center justify-center rounded-full bg-accent text-[9px] text-white">{assignedMember.username[0]?.toUpperCase()}</div> : <div className="flex h-5 w-5 items-center justify-center rounded-full border border-dashed border-border text-muted"><Plus size={10} /></div>
+                          assignedMember ? <div className="flex h-5 w-5 items-center justify-center rounded-full bg-accent text-[9px] text-white">{assignedMember.initials}</div> : <div className="flex h-5 w-5 items-center justify-center rounded-full border border-dashed border-border text-muted"><Plus size={10} /></div>
                         }>
                           {(close) => (
                             <>
-                              <button onClick={() => { updateSubtask(s.id, { assigneeId: null }); close(); }} className="flex w-full items-center rounded-lg px-2 py-1 text-xs text-foreground hover:bg-sidebar-active">Unassigned</button>
-                              {memberOptions.map((m) => (
-                                <button key={m.id} onClick={() => { updateSubtask(s.id, { assigneeId: m.id }); close(); }} className="flex w-full items-center rounded-lg px-2 py-1 text-xs text-foreground hover:bg-sidebar-active">{m.username}</button>
-                              ))}
+                              {assignedTaskMembers.length === 0 ? (
+                                <p className="px-2 py-1.5 text-xs text-muted">Assign someone to this task first</p>
+                              ) : (
+                                <>
+                                  <button onClick={() => { updateSubtask(s.id, { assigneeId: null }); close(); }} className="flex w-full items-center rounded-lg px-2 py-1 text-xs text-foreground hover:bg-sidebar-active">Unassigned</button>
+                                  {assignedTaskMembers.map((m) => (
+                                    <button key={m.id} onClick={() => { updateSubtask(s.id, { assigneeId: m.id }); close(); }} className="flex w-full items-center rounded-lg px-2 py-1 text-xs text-foreground hover:bg-sidebar-active">{m.name}</button>
+                                  ))}
+                                </>
+                              )}
                             </>
                           )}
                         </InlineQuickCell>
@@ -439,7 +490,17 @@ export default function TaskDetailPage() {
                         </InlineQuickCell>
                       </span>
 
-                      <button onClick={() => setSubtasks((prev) => prev.filter((x) => x.id !== s.id))} className="w-8 text-muted hover:text-destructive" aria-label="Remove subtask"><Trash2 size={13} /></button>
+                      <button
+                        onClick={() => {
+                          const next = subtasks.filter((x) => x.id !== s.id);
+                          setSubtasks(next);
+                          saveField({ subtasks: next });
+                        }}
+                        className="w-8 text-muted hover:text-destructive"
+                        aria-label="Remove subtask"
+                      >
+                        <Trash2 size={13} />
+                      </button>
                     </div>
                   );
                 })}
@@ -451,7 +512,6 @@ export default function TaskDetailPage() {
             )}
           </div>
 
-          {/* Comments */}
           <div className="mt-6">
             <p className="mb-2 text-sm font-medium text-secondary">Comments</p>
             <div className="flex flex-col gap-3">
@@ -493,8 +553,32 @@ export default function TaskDetailPage() {
             <SelectField label="Priority" value={task.priority} onChange={handlePriorityChange}
               options={PRIORITY_OPTIONS.map((o) => ({ value: o.value, label: o.label, leading: priorityLeading(o) }))} />
 
-            <SelectField label="Members" value={task.assigneeId ?? ''} onChange={handleAssigneeChange}
-              options={[{ value: '', label: 'Unassigned' }, ...memberOptions.map((m) => ({ value: m.id, label: m.username }))]} />
+            <div className="flex items-center justify-between rounded-lg px-2 py-2 text-sm">
+              <span className="text-secondary">Members</span>
+              <InlineQuickCell
+                widthClass="w-52"
+                trigger={
+                  task.assignees.length > 0 ? (
+                    <span className="text-foreground">{task.assignees.length} assigned</span>
+                  ) : (
+                    <span className="text-muted">Unassigned</span>
+                  )
+                }
+              >
+                {() => (
+                  <>
+                    {memberOptions.map((m) => {
+                      const selected = task.assignees.some((a) => a.id === m.id);
+                      return (
+                        <button key={m.id} onClick={() => toggleAssignee(m.id)} className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-sm text-foreground hover:bg-sidebar-active">
+                          {m.username} {selected && <Check size={13} className="text-accent" />}
+                        </button>
+                      );
+                    })}
+                  </>
+                )}
+              </InlineQuickCell>
+            </div>
 
             <div className="flex items-center justify-between rounded-lg px-2 py-2 text-sm">
               <span className="text-secondary">Dates</span>

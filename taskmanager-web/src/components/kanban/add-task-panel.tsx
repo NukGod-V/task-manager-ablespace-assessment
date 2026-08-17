@@ -1,9 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { X, Tag, Plus, Trash2, Link2, MessageSquare } from 'lucide-react';
+import { X, Tag, Plus, Trash2, Link2, MessageSquare, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { SelectField } from '@/components/ui/select-field';
+import { InlineQuickCell } from './inline-quick-cell';
 import { useTaskActions } from '@/components/layout/task-actions-context';
 import { useActiveProject } from '@/components/providers/active-project-provider';
 import { fetchProjects, type UiProject } from '@/lib/api';
@@ -32,27 +33,28 @@ export function AddTaskPanel({ defaultStatus, onClose }: AddTaskPanelProps) {
   const [status, setStatus] = useState<TaskStatus>(defaultStatus ?? 'todo');
   const [priority, setPriority] = useState<TaskPriority>('no_priority');
   const [dueDate, setDueDate] = useState('');
-  const [assigneeId, setAssigneeId] = useState<string>(''); // We will initialize this in the effect
+
+  // NEW: Multi-assignee state
+  const [assigneeIds, setAssigneeIds] = useState<string[]>([]);
 
   const [labels, setLabels] = useState<string[]>([]);
   const [labelInput, setLabelInput] = useState('');
   const [resources, setResources] = useState<{ id: string; name: string; url: string }[]>([]);
   const [resourceName, setResourceName] = useState('');
   const [resourceUrl, setResourceUrl] = useState('');
-  const [subtasks, setSubtasks] = useState<{ id: string; title: string; done: boolean }[]>([]);
+
+  // Updated subtask state to match new schema requirements
+  const [subtasks, setSubtasks] = useState<{ id: string; title: string; done: boolean; priority: TaskPriority; assigneeId: string | null; dueDate: string | null }[]>([]);
   const [subtaskInput, setSubtaskInput] = useState('');
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // 1. Fetch and set the current user, then immediately default the assignee to themselves
+    // 1. Fetch and set the current user, default assignee to self if array is empty
     const user = getStoredUser();
     if (user) {
       setCurrentUser(user);
-      setAssigneeId(user.id);
-    } else {
-      setAssigneeId(''); // Fallback to unassigned
     }
 
     // 2. Fetch projects
@@ -68,20 +70,36 @@ export function AddTaskPanel({ defaultStatus, onClose }: AddTaskPanelProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    if (currentUser && selectedProject && assigneeIds.length === 0) {
+      setAssigneeIds([currentUser.id]);
+    }
+  }, [currentUser, selectedProject]); // eslint-disable-line react-hooks/exhaustive-deps
+
   function addLabel() {
     const val = labelInput.trim();
     if (val && !labels.includes(val)) setLabels((prev) => [...prev, val]);
     setLabelInput('');
   }
+
   function addResource() {
     if (!resourceName.trim() || !resourceUrl.trim()) return;
     setResources((prev) => [...prev, { id: crypto.randomUUID(), name: resourceName.trim(), url: resourceUrl.trim() }]);
-    setResourceName(''); setResourceUrl('');
+    setResourceName('');
+    setResourceUrl('');
   }
+
   function addSubtask() {
     const val = subtaskInput.trim();
     if (!val) return;
-    setSubtasks((prev) => [...prev, { id: crypto.randomUUID(), title: val, done: false }]);
+    setSubtasks((prev) => [...prev, {
+      id: crypto.randomUUID(),
+      title: val,
+      done: false,
+      priority: 'no_priority',
+      assigneeId: null,
+      dueDate: null
+    }]);
     setSubtaskInput('');
   }
 
@@ -89,13 +107,21 @@ export function AddTaskPanel({ defaultStatus, onClose }: AddTaskPanelProps) {
     if (!title.trim()) { setError('Title is required.'); return; }
     if (!projectId) { setError('A project is required — every task belongs to one.'); return; }
     if (!createTaskHandler) { setError('Task creation isn\u2019t available right now.'); return; }
+
     setSubmitting(true);
     setError(null);
+
     try {
       await createTaskHandler(projectId, {
-        title: title.trim(), description: description.trim() || undefined, status, priority,
-        dueDate: dueDate || undefined, assigneeId: assigneeId || undefined,
+        title: title.trim(),
+        description: description.trim() || undefined,
+        status,
+        priority,
+        dueDate: dueDate || undefined,
+        assigneeIds: assigneeIds.length > 0 ? assigneeIds : undefined,
         labels: labels.length > 0 ? labels : undefined,
+        resources,
+        subtasks
       });
       onClose();
     } catch (err) {
@@ -105,13 +131,9 @@ export function AddTaskPanel({ defaultStatus, onClose }: AddTaskPanelProps) {
   }
 
   const projectOptions = projects.map((p) => ({ value: p.id, label: p.name }));
-  const assigneeOptions = [
-    { value: '', label: 'Unassigned' },
-    ...((selectedProject?.members ?? []).map((m) => ({
-      value: m.id,
-      label: m.id === currentUser?.id ? 'You' : m.username, // matches the "You" labeling already used on the Projects page
-    }))),
-  ];
+
+  // Available if you expand the UI to allow assigning subtasks during creation
+  const assignedMembers = (selectedProject?.members ?? []).filter((m) => assigneeIds.includes(m.id));
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/40" onClick={onClose}>
@@ -198,7 +220,35 @@ export function AddTaskPanel({ defaultStatus, onClose }: AddTaskPanelProps) {
             <SelectField label="Status" value={status} onChange={setStatus} options={STATUS_OPTIONS.map((o) => ({ value: o.value, label: o.label, leading: <span className={cn('h-2 w-2 rounded-full', o.dot)} /> }))} />
             <SelectField label="Project" value={projectId} onChange={setProjectId} options={projectOptions} />
             <SelectField label="Priority" value={priority} onChange={setPriority} options={PRIORITY_OPTIONS.map((o) => ({ value: o.value, label: o.label, leading: priorityLeading(o) }))} />
-            <SelectField label="Members" value={assigneeId} onChange={setAssigneeId} options={assigneeOptions} />
+
+            <div className="flex items-center justify-between rounded-lg px-2 py-2 text-sm">
+              <span className="text-muted">Members</span>
+              <InlineQuickCell
+                widthClass="w-52"
+                trigger={
+                  assigneeIds.length > 0 ? (
+                    <span className="text-sm text-foreground">{assigneeIds.length} assigned</span>
+                  ) : (
+                    <span className="text-sm text-muted">Unassigned</span>
+                  )
+                }
+              >
+                {() => (
+                  <>
+                    {(selectedProject?.members ?? []).map((m) => {
+                      const selected = assigneeIds.includes(m.id);
+                      return (
+                        <button key={m.id} onClick={() => setAssigneeIds((prev) => (selected ? prev.filter((id) => id !== m.id) : [...prev, m.id]))} className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-sm text-foreground hover:bg-sidebar-active">
+                          {m.id === currentUser?.id ? 'You' : m.username}
+                          {selected && <Check size={13} className="text-accent" />}
+                        </button>
+                      );
+                    })}
+                  </>
+                )}
+              </InlineQuickCell>
+            </div>
+
             <div className="flex items-center justify-between rounded-lg px-2 py-2 text-sm">
               <span className="text-muted">Dates</span>
               <span className="text-foreground">{dueDate ? new Date(dueDate).toLocaleDateString('en-US', { day: 'numeric', month: 'short' }) : 'No date'}</span>

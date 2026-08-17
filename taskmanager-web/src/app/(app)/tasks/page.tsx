@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { BoardBoundary } from '@/components/kanban/board-boundary';
 import { TaskListView } from '@/components/kanban/task-list-view';
@@ -13,7 +13,9 @@ import { getAccessToken } from '@/lib/auth';
 import { useViewMode } from '@/components/layout/view-mode-context';
 import { useFields } from '@/components/layout/fields-context';
 import { useTaskActions } from '@/components/layout/task-actions-context';
+import { useFilters } from '@/components/layout/filter-context';
 import { useActiveProject } from '@/components/providers/active-project-provider';
+import { taskMatchesFilters } from '@/lib/task-filter';
 import type { KanbanColumn, MockTask, TaskStatus } from '@/types/task';
 
 export default function TasksPage() {
@@ -22,6 +24,7 @@ export default function TasksPage() {
   const { fields: visibleFields } = useFields('tasks', viewMode);
   const { setCreateTaskHandler, openAddTaskModal } = useTaskActions();
   const { activeProject, setActiveProject, hydrated } = useActiveProject();
+  const { selections: filterSelections, setOptions: setFilterOptions } = useFilters();
 
   const [columns, setColumns] = useState<KanbanColumn[]>(INITIAL_COLUMNS);
   const [tasks, setTasks] = useState<MockTask[]>([]);
@@ -32,7 +35,6 @@ export default function TasksPage() {
   useEffect(() => {
     if (!getAccessToken()) { router.push('/login'); return; }
     if (!hydrated) return;
-
     async function init() {
       setLoading(true);
       setError(null);
@@ -48,7 +50,7 @@ export default function TasksPage() {
         const [loadedTasks, allProjects] = await Promise.all([fetchTasks(project.id), fetchProjects()]);
         setTasks(loadedTasks);
         const matched = allProjects.find((p) => p.id === project!.id);
-        setProjectMembers(matched?.members ?? []); // NEW — powers the Members quick-select in List view
+        setProjectMembers(matched?.members ?? []);
       } catch (err) {
         const message = err instanceof Error ? err.message : '';
         if (message.includes('403') || message.includes('404')) {
@@ -66,6 +68,18 @@ export default function TasksPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeProject?.id, hydrated, router]);
 
+  // Feeds Topbar's Filter popover real, current data — project members and
+  // every label actually used somewhere in this project's tasks.
+  useEffect(() => {
+    const distinctLabels = Array.from(new Set(tasks.flatMap((t) => t.labels))).sort();
+    setFilterOptions({ members: projectMembers, labels: distinctLabels });
+  }, [tasks, projectMembers, setFilterOptions]);
+
+  const filteredTasks = useMemo(
+    () => tasks.filter((t) => taskMatchesFilters(t, filterSelections)),
+    [tasks, filterSelections],
+  );
+
   useEffect(() => {
     setCreateTaskHandler(async (projectId: string, input: CreateTaskInput) => {
       const created = await createTask(projectId, input);
@@ -82,39 +96,35 @@ export default function TasksPage() {
   async function handleDeleteTask(taskId: string) {
     const previous = tasks;
     setTasks((prev) => prev.filter((t) => t.id !== taskId));
+    try { await deleteTask(taskId); } catch { setTasks(previous); setError('Could not delete that task.'); }
+  }
+
+  async function handleDuplicateTask(taskId: string) {
+    const original = tasks.find((t) => t.id === taskId);
+    if (!original || !activeProject) return;
     try {
-      await deleteTask(taskId);
+      const copy = await createTask(activeProject.id, {
+        title: `${original.title} (Copy)`,
+        description: original.description ?? undefined,
+        status: original.status,
+        priority: original.priority,
+        dueDate: original.dueDate ?? undefined,
+        assigneeIds: original.assignees.map((a) => a.id),
+        labels: original.labels,
+        resources: original.resources,
+        subtasks: original.subtasks,
+      });
+      setTasks((prev) => [...prev, copy]);
     } catch {
-      setTasks(previous);
-      setError('Could not delete that task.');
+      setError('Could not duplicate that task.');
     }
   }
 
-  // Backs the List view's inline "+" quick-edit cells (priority / member / date).
   async function handleQuickUpdate(taskId: string, patch: UpdateTaskInput) {
-    const previous = tasks;
-    setTasks((prev) => prev.map((t) => {
-      if (t.id !== taskId) return t;
-      const next = { ...t };
-      if (patch.priority !== undefined) next.priority = patch.priority;
-      if (patch.dueDate !== undefined) next.dueDate = patch.dueDate;
-      if (patch.assigneeId !== undefined) {
-        if (!patch.assigneeId) {
-          next.assignee = null;
-          next.assigneeId = null;
-        } else {
-          const member = projectMembers.find((m) => m.id === patch.assigneeId);
-          next.assigneeId = patch.assigneeId;
-          if (member) next.assignee = { name: member.username, role: 'Member', initials: member.username[0]?.toUpperCase() ?? '?' };
-        }
-      }
-      return next;
-    }));
     try {
       const saved = await updateTask(taskId, patch);
       setTasks((prev) => prev.map((t) => (t.id === saved.id ? saved : t)));
     } catch {
-      setTasks(previous);
       setError('Could not save that change.');
     }
   }
@@ -133,24 +143,26 @@ export default function TasksPage() {
       {viewMode === 'board' ? (
         <BoardBoundary
           columns={columns}
-          tasks={tasks}
+          tasks={filteredTasks}
           visibleFields={visibleFields}
           setColumns={setColumns}
           setTasks={setTasks}
           onOpenTask={handleOpenTask}
           onDeleteTask={handleDeleteTask}
+          onDuplicateTask={handleDuplicateTask}
           onAddTask={openAddTaskModal}
           onTaskReordered={handleTaskReordered}
         />
       ) : (
         <TaskListView
           columns={columns}
-          tasks={tasks}
+          tasks={filteredTasks}
           visibleFields={visibleFields}
           projectMembers={projectMembers}
           setTasks={setTasks}
           onOpenTask={handleOpenTask}
           onDeleteTask={handleDeleteTask}
+          onDuplicateTask={handleDuplicateTask}
           onAddTask={openAddTaskModal}
           onUpdateTask={handleQuickUpdate}
           onTaskReordered={handleTaskReordered}

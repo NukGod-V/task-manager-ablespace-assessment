@@ -28,9 +28,10 @@ export interface BoardProps {
   onDeleteTask: (taskId: string) => void;
   onAddTask: (status: TaskStatus) => void;
   onTaskReordered: (taskId: string, status: TaskStatus, position: number) => void;
+  onDuplicateTask: (taskId: string) => void;
 }
 
-export function Board({ columns, tasks, visibleFields, setColumns, setTasks, onOpenTask, onDeleteTask, onAddTask, onTaskReordered }: BoardProps) {
+export function Board({ columns, tasks, visibleFields, setColumns, setTasks, onOpenTask, onDeleteTask, onAddTask, onTaskReordered, onDuplicateTask }: BoardProps) {
   const [activeType, setActiveType] = useState<'column' | 'task' | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
 
@@ -122,12 +123,14 @@ export function Board({ columns, tasks, visibleFields, setColumns, setTasks, onO
       <div className="flex h-full gap-5 overflow-x-auto pb-2">
         <SortableContext items={columns.map((c) => c.id)} strategy={horizontalListSortingStrategy}>
           {columns.map((column) => (
-            <Column key={column.id} column={column} tasks={tasksByColumn.get(column.id) ?? []} visibleFields={visibleFields} onOpenTask={onOpenTask} onDeleteTask={onDeleteTask} onAddTask={() => onAddTask(column.id)} />
+            <Column key={column.id} column={column} tasks={tasksByColumn.get(column.id) ?? []}
+                    visibleFields={visibleFields} onOpenTask={onOpenTask} onDeleteTask={onDeleteTask}
+                    onAddTask={() => onAddTask(column.id)} onDuplicateTask={onDuplicateTask} />
           ))}
         </SortableContext>
       </div>
       <DragOverlay>
-        {activeTask && <TaskCard task={activeTask} visibleFields={visibleFields} onOpen={() => {}} onDelete={() => {}} />}
+        {activeTask && <TaskCard task={activeTask} visibleFields={visibleFields} onOpen={() => {}} onDelete={() => {}} onDuplicate={() => {}}/>}
         {activeColumn && <div className="w-[288px] rounded-xl bg-column-header px-3 py-3 text-sm font-semibold text-foreground shadow-lg">{activeColumn.title}</div>}
       </DragOverlay>
     </DndContext>

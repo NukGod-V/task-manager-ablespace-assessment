@@ -3,7 +3,7 @@
 import { useRef, useState } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { GripVertical, MoreHorizontal, CalendarDays, Tag, Pencil, Trash2 } from 'lucide-react';
+import { GripVertical, MoreHorizontal, CalendarDays, Tag, Pencil, Trash2, Copy } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useClickOutside } from '@/hooks/use-click-outside';
 import { PRIORITY_META, STATUS_META } from '@/lib/task-meta';
@@ -11,22 +11,17 @@ import { PriorityIcon } from '@/components/icons/priority-icon';
 import type { MockTask } from '@/types/task';
 import type { FieldVisibility } from '@/lib/task-fields';
 
-const AVATAR_GRADIENTS = [
-  'from-violet-400 to-fuchsia-500', 'from-sky-400 to-blue-500', 'from-emerald-400 to-teal-500',
-  'from-amber-400 to-orange-500', 'from-rose-400 to-pink-500',
-];
-
+const AVATAR_GRADIENTS = ['from-violet-400 to-fuchsia-500', 'from-sky-400 to-blue-500', 'from-emerald-400 to-teal-500', 'from-amber-400 to-orange-500', 'from-rose-400 to-pink-500'];
 function gradientFor(name?: string | null) {
   const safe = name && name.length > 0 ? name : '?';
   const hash = safe.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
   return AVATAR_GRADIENTS[hash % AVATAR_GRADIENTS.length];
 }
-
+// REVERTED — back to conditional overdue coloring, per your instruction.
 function isOverdue(dueDate: string | null) {
   if (!dueDate) return false;
   return new Date(dueDate) < new Date(new Date().toDateString());
 }
-
 function formatDate(dueDate: string) {
   return new Date(dueDate).toLocaleDateString('en-US', { day: 'numeric', month: 'short' });
 }
@@ -36,14 +31,11 @@ interface TaskCardProps {
   visibleFields: FieldVisibility;
   onOpen: () => void;
   onDelete: () => void;
+  onDuplicate: () => void;
 }
 
-export function TaskCard({ task, visibleFields, onOpen, onDelete }: TaskCardProps) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: task.id,
-    data: { type: 'task', status: task.status },
-  });
-
+export function TaskCard({ task, visibleFields, onOpen, onDelete, onDuplicate }: TaskCardProps) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id, data: { type: 'task', status: task.status } });
   const style = { transform: CSS.Transform.toString(transform), transition };
   const overdue = isOverdue(task.dueDate);
   const priority = PRIORITY_META[task.priority];
@@ -53,18 +45,16 @@ export function TaskCard({ task, visibleFields, onOpen, onDelete }: TaskCardProp
   const menuRef = useRef<HTMLDivElement>(null);
   useClickOutside(menuRef, () => setMenuOpen(false));
 
-  const hasAssignee = !!task.assignee?.name;
-  const showAssignee = visibleFields.Members && hasAssignee;
+  const showAssignees = visibleFields.Members && task.assignees.length > 0;
   const showDueDate = visibleFields['Due Date'] && !!task.dueDate;
-  const showMetaRow = showAssignee || showDueDate;
+  const showMetaRow = showAssignees || showDueDate;
   const showPriority = visibleFields.Priority && task.priority !== 'no_priority';
   const showStatus = visibleFields.Status;
   const showLabels = visibleFields.Labels && task.labels.length > 0;
   const showReporter = visibleFields.Reporter && task.reporter;
 
   function handleDeleteClick(e: React.MouseEvent) {
-    e.stopPropagation();
-    setMenuOpen(false);
+    e.stopPropagation(); setMenuOpen(false);
     if (window.confirm("Delete this task? This can't be undone.")) onDelete();
   }
 
@@ -74,80 +64,58 @@ export function TaskCard({ task, visibleFields, onOpen, onDelete }: TaskCardProp
         <button {...attributes} {...listeners} onClick={(e) => e.stopPropagation()} className="mt-0.5 shrink-0 cursor-grab text-muted opacity-0 transition-opacity group-hover:opacity-100 active:cursor-grabbing" aria-label="Drag task">
           <GripVertical size={14} />
         </button>
-
         <p className="flex-1 text-sm font-medium text-foreground">{task.title}</p>
-
         <div ref={menuRef} className="relative shrink-0">
           <button onClick={(e) => { e.stopPropagation(); setMenuOpen((o) => !o); }} className="rounded p-0.5 text-muted opacity-0 transition-opacity hover:bg-sidebar-active group-hover:opacity-100" aria-label="Card menu">
             <MoreHorizontal size={14} />
           </button>
           {menuOpen && (
-            <div className="absolute right-0 top-full z-10 mt-1 w-32 rounded-xl border border-border bg-card p-1.5 shadow-lg" onClick={(e) => e.stopPropagation()}>
-              <button onClick={() => { setMenuOpen(false); onOpen(); }} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm text-foreground hover:bg-sidebar-active">
-                <Pencil size={13} /> Edit
-              </button>
-              <button onClick={handleDeleteClick} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm text-destructive hover:bg-sidebar-active">
-                <Trash2 size={13} /> Delete
-              </button>
+            <div className="absolute right-0 top-full z-50 mt-1 w-32 rounded-xl border border-border bg-card p-1.5 shadow-lg" onClick={(e) => e.stopPropagation()}>
+              <button onClick={() => { setMenuOpen(false); onOpen(); }} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm text-foreground hover:bg-sidebar-active"><Pencil size={13} /> Edit</button>
+              <button onClick={() => { setMenuOpen(false); onDuplicate(); }} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm text-foreground hover:bg-sidebar-active"><Copy size={13} /> Duplicate</button>
+              <button onClick={handleDeleteClick} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm text-destructive hover:bg-sidebar-active"><Trash2 size={13} /> Delete</button>
             </div>
           )}
         </div>
       </div>
 
-      {/* THE FIX: one gap-based container for everything below the title,
-          instead of independently-margined siblings. Spacing is now
-          identical whether 1 field is showing or all 5 — no more "empty
-          space" from a row that's mostly blank. */}
       {(showPriority || showStatus || showMetaRow || showLabels || showReporter) && (
         <div className="mt-2 flex flex-col gap-2">
           {showPriority && (
             <div className={cn('flex items-center gap-1 text-[11px] font-medium', priority.textColor)}>
-              <PriorityIcon level={priority.level} colorClass={priority.textColor} size={12} />
-              {priority.label}
+              <PriorityIcon level={priority.level} colorClass={priority.textColor} size={12} />{priority.label}
             </div>
           )}
-
           {showStatus && (
             <div className="flex items-center gap-1.5 text-[11px] text-muted">
-              <span className={cn('h-1.5 w-1.5 rounded-full', statusMeta.dot)} />
-              {statusMeta.label}
+              <span className={cn('h-1.5 w-1.5 rounded-full', statusMeta.dot)} />{statusMeta.label}
             </div>
           )}
-
           {showMetaRow && (
             <div className="flex items-center justify-between gap-2">
-              {showAssignee ? (
-                <div className="flex items-center gap-2">
-                  <div className={cn('flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-br text-[9px] font-medium text-white', gradientFor(task.assignee?.name))}>
-                    {task.assignee?.initials ?? '?'}
-                  </div>
-                  <span className="text-xs text-secondary">{task.assignee?.role ?? 'Member'}</span>
+              {showAssignees ? (
+                <div className="flex -space-x-1.5">
+                  {task.assignees.slice(0, 3).map((a) => (
+                    <div key={a.id} title={a.name} className={cn('flex h-5 w-5 items-center justify-center rounded-full border-2 border-card bg-gradient-to-br text-[9px] font-medium text-white', gradientFor(a.name))}>{a.initials}</div>
+                  ))}
+                  {task.assignees.length > 3 && <div className="flex h-5 w-5 items-center justify-center rounded-full border-2 border-card bg-sidebar-active text-[8px] text-secondary">+{task.assignees.length - 3}</div>}
                 </div>
-              ) : (
-                <span /> // empty spacer so the date pill still sits right via justify-between, no ml-auto hack needed
-              )}
+              ) : <span />}
               {showDueDate && task.dueDate && (
                 <div className={cn('flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px]', overdue ? 'bg-date-overdue-bg text-date-overdue' : 'text-muted')}>
-                  <CalendarDays size={11} />
-                  {formatDate(task.dueDate)}
+                  <CalendarDays size={11} />{formatDate(task.dueDate)}
                 </div>
               )}
             </div>
           )}
-
           {showLabels && (
             <div className="flex flex-wrap gap-1.5">
               {task.labels.map((label) => (
-                <span key={label} className="flex items-center gap-1 rounded-full bg-chip-bg px-2 py-0.5 text-[11px] font-medium text-chip-text">
-                  <Tag size={10} /> {label}
-                </span>
+                <span key={label} className="flex items-center gap-1 rounded-full bg-chip-bg px-2 py-0.5 text-[11px] font-medium text-chip-text"><Tag size={10} /> {label}</span>
               ))}
             </div>
           )}
-
-          {showReporter && (
-            <p className="text-[11px] text-muted">Reported by {task.reporter!.name}</p>
-          )}
+          {showReporter && <p className="text-[11px] text-muted">Reported by {task.reporter!.name}</p>}
         </div>
       )}
     </div>

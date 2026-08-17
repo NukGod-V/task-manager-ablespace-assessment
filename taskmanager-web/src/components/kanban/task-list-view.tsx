@@ -9,7 +9,7 @@ import {
   SortableContext, verticalListSortingStrategy, sortableKeyboardCoordinates, arrayMove, useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { ChevronDown, ChevronRight, MoreHorizontal, Plus, Tag, GripVertical, Pencil, Trash2, Check } from 'lucide-react';
+import { ChevronDown, ChevronRight, MoreHorizontal, Plus, Tag, GripVertical, Pencil, Trash2, Check, Copy } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useClickOutside } from '@/hooks/use-click-outside';
 import { PRIORITY_META, STATUS_META } from '@/lib/task-meta';
@@ -33,6 +33,7 @@ interface TaskListViewProps {
   onAddTask: (status: TaskStatus) => void;
   onUpdateTask: (taskId: string, patch: UpdateTaskInput) => void;
   onTaskReordered: (taskId: string, status: TaskStatus, position: number) => void;
+  onDuplicateTask: (id: string) => void;
 }
 
 function isOverdue(dueDate: string | null) {
@@ -45,7 +46,7 @@ function formatDate(dueDate: string) {
 
 export function TaskListView({
   columns, tasks, visibleFields, projectMembers, setTasks,
-  onOpenTask, onDeleteTask, onAddTask, onUpdateTask, onTaskReordered,
+  onOpenTask, onDeleteTask, onAddTask, onUpdateTask, onTaskReordered, onDuplicateTask // <-- ADD IT HERE
 }: TaskListViewProps) {
   const [collapsedGroups, setCollapsedGroups] = useState<string[]>([]);
   function toggleGroup(id: string) {
@@ -123,6 +124,7 @@ export function TaskListView({
             onDeleteTask={onDeleteTask}
             onAddTask={() => onAddTask(column.id)}
             onUpdateTask={onUpdateTask}
+            onDuplicateTask={onDuplicateTask} // <-- ADD THIS LINE
           />
         ))}
       </div>
@@ -132,7 +134,7 @@ export function TaskListView({
 
 function TaskGroup({
   column, tasks, visibleFields, projectMembers, collapsed, onToggle,
-  onOpenTask, onDeleteTask, onAddTask, onUpdateTask,
+  onOpenTask, onDeleteTask, onAddTask, onUpdateTask, onDuplicateTask, // <-- ADD IT HERE
 }: {
   column: KanbanColumn;
   tasks: MockTask[];
@@ -144,6 +146,7 @@ function TaskGroup({
   onDeleteTask: (id: string) => void;
   onAddTask: () => void;
   onUpdateTask: (taskId: string, patch: UpdateTaskInput) => void;
+  onDuplicateTask: (id: string) => void;
 }) {
   // Droppable zone so a group with ZERO tasks can still receive a drop —
   // without this, dropping into an empty group had no target to hit.
@@ -187,6 +190,7 @@ function TaskGroup({
                   onOpen={() => onOpenTask(task.id)}
                   onDelete={() => onDeleteTask(task.id)}
                   onUpdate={(patch) => onUpdateTask(task.id, patch)}
+                  onDuplicate={() => onDuplicateTask(task.id)}
                 />
               ))}
             </SortableContext>
@@ -202,7 +206,7 @@ function TaskGroup({
 }
 
 function TaskRow({
-  task, visibleFields, projectMembers, onOpen, onDelete, onUpdate,
+  task, visibleFields, projectMembers, onOpen, onDelete, onUpdate, onDuplicate,
 }: {
   task: MockTask;
   visibleFields: FieldVisibility;
@@ -210,6 +214,7 @@ function TaskRow({
   onOpen: () => void;
   onDelete: () => void;
   onUpdate: (patch: UpdateTaskInput) => void;
+  onDuplicate: () => void; // Fixed prop type
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: task.id,
@@ -250,64 +255,47 @@ function TaskRow({
         </span>
       )}
 
-      {visibleFields.Priority && (
-        <span className="w-28">
-          <InlineQuickCell
-            widthClass="w-40"
-            trigger={
-              task.priority !== 'no_priority' ? (
-                <span className={cn('flex items-center gap-1', priority.textColor)}>
-                  <PriorityIcon level={priority.level} colorClass={priority.textColor} size={12} />
-                  {priority.label}
-                </span>
-              ) : (
-                <span className="flex items-center gap-1 text-xs text-muted"><Plus size={12} /> Priority</span>
-              )
-            }
-          >
-            {(close) => (
-              <>
-                {PRIORITY_OPTIONS.map((opt) => (
-                  <button key={opt.value} onClick={() => { onUpdate({ priority: opt.value as TaskPriority }); close(); }} className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-foreground hover:bg-sidebar-active">
-                    {priorityLeading(opt)}
-                    <span className="flex-1 text-left">{opt.label}</span>
-                    {task.priority === opt.value && <Check size={13} className="text-accent" />}
-                  </button>
-                ))}
-              </>
-            )}
-          </InlineQuickCell>
-        </span>
-      )}
-
+      {/* NEW Multi-Assignee Block */}
       {visibleFields.Members && (
         <span className="w-20">
           <InlineQuickCell
             trigger={
-              task.assignee ? (
-                <div className="flex h-6 w-6 items-center justify-center rounded-full bg-accent text-[10px] text-white">{task.assignee.initials}</div>
+              task.assignees.length > 0 ? (
+                <div className="flex -space-x-1">
+                  {task.assignees.slice(0, 2).map((a) => (
+                    <div key={a.id} title={a.name} className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-card bg-accent text-[10px] text-white">{a.initials}</div>
+                  ))}
+                  {task.assignees.length > 2 && <div className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-card bg-sidebar-active text-[9px] text-secondary">+{task.assignees.length - 2}</div>}
+                </div>
               ) : (
                 <div className="flex h-6 w-6 items-center justify-center rounded-full border border-dashed border-border text-muted"><Plus size={12} /></div>
               )
             }
           >
-            {(close) => (
+            {() => (
               <>
-                <button onClick={() => { onUpdate({ assigneeId: null }); close(); }} className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-sm text-foreground hover:bg-sidebar-active">
-                  Unassigned
-                  {!task.assigneeId && <Check size={13} className="text-accent" />}
-                </button>
-                {projectMembers.map((m) => (
-                  <button key={m.id} onClick={() => { onUpdate({ assigneeId: m.id }); close(); }} className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-sm text-foreground hover:bg-sidebar-active">
-                    {m.username}
-                    {task.assigneeId === m.id && <Check size={13} className="text-accent" />}
-                  </button>
-                ))}
+                {projectMembers.map((m) => {
+                  const selected = task.assignees.some((a) => a.id === m.id);
+                  return (
+                    <button
+                      key={m.id}
+                      onClick={() => {
+                        const nextIds = selected ? task.assignees.filter((a) => a.id !== m.id).map((a) => a.id) : [...task.assignees.map((a) => a.id), m.id];
+                        onUpdate({ assigneeIds: nextIds });
+                      }}
+                      className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-sm text-foreground hover:bg-sidebar-active"
+                    >
+                      {m.username}
+                      {selected && <Check size={13} className="text-accent" />}
+                    </button>
+                  );
+                })}
               </>
             )}
           </InlineQuickCell>
         </span>
       )}
+      {/* OLD block deleted from here */}
 
       {visibleFields['Due Date'] && (
         <span className="w-32">
@@ -346,9 +334,8 @@ function TaskRow({
           <MoreHorizontal size={16} />
         </button>
         {menuOpen && (
-          // z-50, up from z-10 — the earlier value could lose to sibling
-          // rows' default paint order; this guarantees it's always on top.
           <div className="absolute right-0 top-full z-50 mt-1 w-32 rounded-xl border border-border bg-card p-1.5 shadow-lg" onClick={(e) => e.stopPropagation()}>
+            <button onClick={() => { setMenuOpen(false); onDuplicate(); }} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm text-foreground hover:bg-sidebar-active"><Copy size={13} /> Duplicate</button>
             <button onClick={() => { setMenuOpen(false); onOpen(); }} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm text-foreground hover:bg-sidebar-active"><Pencil size={13} /> Edit</button>
             <button onClick={handleDelete} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm text-destructive hover:bg-sidebar-active"><Trash2 size={13} /> Delete</button>
           </div>

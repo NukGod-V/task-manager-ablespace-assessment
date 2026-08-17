@@ -16,9 +16,10 @@ interface ColumnProps {
   onOpenTask: (taskId: string) => void;
   onDeleteTask: (taskId: string) => void;
   onAddTask: () => void;
+  onDuplicateTask: (taskId: string) => void;
 }
 
-export function Column({ column, tasks, visibleFields, onOpenTask, onDeleteTask, onAddTask }: ColumnProps) {
+export function Column({ column, tasks, visibleFields, onOpenTask, onDeleteTask, onAddTask, onDuplicateTask }: ColumnProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: column.id, data: { type: 'column' } });
   const { setNodeRef: setDropRef } = useDroppable({ id: `${column.id}-dropzone`, data: { type: 'column-drop-area', status: column.id } });
   const style = { transform: CSS.Transform.toString(transform), transition };
@@ -41,7 +42,7 @@ export function Column({ column, tasks, visibleFields, onOpenTask, onDeleteTask,
       <div ref={setDropRef} className="flex flex-col gap-2 overflow-y-auto px-2 pb-2">
         <SortableContext items={tasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
           {tasks.map((task) => (
-            <TaskCard key={task.id} task={task} visibleFields={visibleFields} onOpen={() => onOpenTask(task.id)} onDelete={() => onDeleteTask(task.id)} />
+            <TaskCard key={task.id} task={task} visibleFields={visibleFields} onOpen={() => onOpenTask(task.id)} onDelete={() => onDeleteTask(task.id)} onDuplicate={() => onDuplicateTask(task.id)}/>
           ))}
         </SortableContext>
         <button onClick={onAddTask} className="mt-1 flex items-center gap-1.5 rounded-lg px-2 py-2 text-left text-xs text-muted hover:bg-sidebar-active hover:text-foreground">
