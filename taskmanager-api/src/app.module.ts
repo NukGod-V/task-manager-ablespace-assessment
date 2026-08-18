@@ -29,6 +29,10 @@ import { CommentsModule } from './comments/comments.module';
         username: config.get<string>('DB_USERNAME'),
         password: config.get<string>('DB_PASSWORD'),
         database: config.get<string>('DB_NAME'),
+        ssl:
+          process.env.NODE_ENV === 'production'
+            ? { rejectUnauthorized: false }
+            : false,
         autoLoadEntities: true, // picks up entities registered via forFeature() in each module
         synchronize: true, // ⚠️ OK for assessment/dev; switch to migrations before "real" prod
       }),
