@@ -5,6 +5,8 @@ export interface AuthUser {
   username: string;
   authProvider: string;
   email?: string;
+  fullName?: string | null; // NEW
+  title?: string | null;    // NEW
 }
 
 const TOKEN_KEY = 'accessToken';

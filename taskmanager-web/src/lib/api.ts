@@ -117,3 +117,19 @@ export async function postComment(taskId: string, body: string): Promise<UiComme
   const c = await apiFetch<ApiComment>(`/tasks/${taskId}/comments`, { method: 'POST', body: JSON.stringify({ body }) });
   return { id: c.id, author: c.author?.username ?? 'Unknown', body: c.body, createdAt: c.createdAt };
 }
+export interface UpdateProfileInput {
+  fullName?: string;
+  title?: string;
+  username?: string;
+}
+
+export async function fetchCurrentUser(): Promise<UiAppUser & { fullName: string | null; title: string | null; authProvider: string }> {
+  return apiFetch(`/auth/me`);
+}
+
+export async function updateProfile(input: UpdateProfileInput) {
+  return apiFetch<{ id: string; username: string; authProvider: string; fullName: string | null; title: string | null }>('/users/me', {
+    method: 'PATCH',
+    body: JSON.stringify(input),
+  });
+}
