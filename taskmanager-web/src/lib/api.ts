@@ -121,6 +121,7 @@ export interface UpdateProfileInput {
   fullName?: string;
   title?: string;
   username?: string;
+  avatarUrl?: string;
 }
 
 export async function fetchCurrentUser(): Promise<UiAppUser & { fullName: string | null; title: string | null; authProvider: string }> {

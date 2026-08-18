@@ -116,25 +116,39 @@ function ProfileSection({ user, onUserChange }: { user: AuthUser; onUserChange: 
   const [fullName, setFullName] = useState(user.fullName ?? '');
   const [title, setTitle] = useState(user.title ?? '');
   const [username, setUsername] = useState(user.username);
+  const [avatarUrl, setAvatarUrl] = useState((user as any).avatarUrl ?? null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function persist(patch: { fullName?: string; title?: string; username?: string }) {
+  // revert: called on failure to snap the field back to server truth —
+  // THE fix for the username bug. A rejected value no longer lingers to
+  // silently re-fire on the next unrelated blur.
+  async function persist(patch: { fullName?: string; title?: string; username?: string; avatarUrl?: string }, revert?: () => void) {
     setSaving(true);
     setError(null);
     try {
       const saved = await updateProfile(patch);
       const nextUser: AuthUser = { ...user, username: saved.username, fullName: saved.fullName, title: saved.title };
       onUserChange(nextUser);
-      // Keep the cached session in sync — Sidebar/workspace switcher reads
-      // getStoredUser() directly, so this is what makes a username change
-      // show up immediately elsewhere in the app without a hard refresh.
       setSession(localStorage.getItem('accessToken') ?? '', nextUser);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save that change.');
+      revert?.();
     } finally {
       setSaving(false);
     }
+  }
+
+  function handleAvatarSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      setAvatarUrl(dataUrl);
+      persist({ avatarUrl: dataUrl }, () => setAvatarUrl((user as any).avatarUrl ?? null));
+    };
+    reader.readAsDataURL(file);
   }
 
   return (
@@ -143,14 +157,24 @@ function ProfileSection({ user, onUserChange }: { user: AuthUser; onUserChange: 
 
       <div className="rounded-xl border border-border bg-card">
         <Row label="Profile picture">
-          <div title="Profile picture upload coming soon" className="flex h-9 w-9 items-center justify-center rounded-full bg-accent text-sm font-medium text-white">
-            {user.username[0]?.toUpperCase() ?? '?'}
-          </div>
+          <label className="group relative cursor-pointer">
+            <input type="file" accept="image/*" onChange={handleAvatarSelect} className="hidden" />
+            {avatarUrl ? (
+              <img src={avatarUrl} alt="" className="h-9 w-9 rounded-full object-cover" />
+            ) : (
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-accent text-sm font-medium text-white">
+                {user.username[0]?.toUpperCase() ?? '?'}
+              </div>
+            )}
+            <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-cta-primary text-cta-primary-foreground opacity-0 transition-opacity group-hover:opacity-100">
+              <Pencil size={9} />
+            </span>
+          </label>
         </Row>
 
         <Row label="Email">
           <div className="flex items-center gap-2">
-            <span className="text-sm text-muted">{user.email ?? 'No email (guest account)'}</span>
+            <span className="text-sm text-muted">{user.email ?? 'No email — connect Google to add one'}</span>
             <button disabled title="Connect Google to add an email" className="text-muted opacity-40">
               <Pencil size={13} />
             </button>
@@ -161,7 +185,7 @@ function ProfileSection({ user, onUserChange }: { user: AuthUser; onUserChange: 
           <input
             value={fullName}
             onChange={(e) => setFullName(e.target.value)}
-            onBlur={() => fullName !== (user.fullName ?? '') && persist({ fullName })}
+            onBlur={() => fullName !== (user.fullName ?? '') && persist({ fullName }, () => setFullName(user.fullName ?? ''))}
             placeholder="Your full name"
             className="w-56 rounded-lg bg-sidebar px-3 py-2 text-right text-sm text-foreground outline-none placeholder:text-muted"
           />
@@ -171,7 +195,7 @@ function ProfileSection({ user, onUserChange }: { user: AuthUser; onUserChange: 
           <input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            onBlur={() => title !== (user.title ?? '') && persist({ title })}
+            onBlur={() => title !== (user.title ?? '') && persist({ title }, () => setTitle(user.title ?? ''))}
             placeholder="Designer"
             className="w-56 rounded-lg bg-sidebar px-3 py-2 text-right text-sm text-foreground outline-none placeholder:text-muted"
           />
@@ -181,7 +205,12 @@ function ProfileSection({ user, onUserChange }: { user: AuthUser; onUserChange: 
           <input
             value={username}
             onChange={(e) => setUsername(e.target.value)}
-            onBlur={() => username.trim() && username !== user.username && persist({ username: username.trim() })}
+            onBlur={() => {
+              const trimmed = username.trim();
+              if (trimmed && trimmed !== user.username) {
+                persist({ username: trimmed }, () => setUsername(user.username)); // resets on 409 — no more stale re-fires
+              }
+            }}
             className="w-56 rounded-lg bg-sidebar px-3 py-2 text-right text-sm text-foreground outline-none"
           />
         </Row>
