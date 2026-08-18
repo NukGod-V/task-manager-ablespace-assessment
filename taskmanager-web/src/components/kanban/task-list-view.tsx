@@ -19,6 +19,7 @@ import { InlineQuickCell } from './inline-quick-cell';
 import type { KanbanColumn, MockTask, TaskStatus, TaskPriority } from '@/types/task';
 import type { FieldVisibility } from '@/lib/task-fields';
 import type { UpdateTaskInput } from '@/lib/api';
+import { Avatar } from '@/components/ui/avatar';
 
 interface ProjectMember { id: string; username: string; }
 
@@ -261,14 +262,18 @@ function TaskRow({
           <InlineQuickCell
             trigger={
               task.assignees.length > 0 ? (
-                <div className="flex -space-x-1">
-                  {task.assignees.slice(0, 2).map((a) => (
-                    <div key={a.id} title={a.name} className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-card bg-accent text-[10px] text-white">{a.initials}</div>
-                  ))}
-                  {task.assignees.length > 2 && <div className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-card bg-sidebar-active text-[9px] text-secondary">+{task.assignees.length - 2}</div>}
-                </div>
+                  <div className="flex -space-x-1">
+                    {task.assignees.slice(0, 2).map((a) => (
+                        <Avatar key={a.id} name={a.name} avatarUrl={a.avatarUrl} initials={a.initials} size={24}
+                                className="border-2 border-card"/>
+                    ))}
+                    {task.assignees.length > 2 && <div
+                        className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-card bg-sidebar-active text-[9px] text-secondary">+{task.assignees.length - 2}</div>}
+                  </div>
               ) : (
-                <div className="flex h-6 w-6 items-center justify-center rounded-full border border-dashed border-border text-muted"><Plus size={12} /></div>
+                  <div
+                      className="flex h-6 w-6 items-center justify-center rounded-full border border-dashed border-border text-muted">
+                    <Plus size={12}/></div>
               )
             }
           >

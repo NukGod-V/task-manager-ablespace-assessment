@@ -6,6 +6,7 @@ import { useTheme } from 'next-themes';
 import { ArrowLeft, Search, User as UserIcon, Sun, Palette, Pencil, Check, Sun as SunIcon, Moon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useColorMode, type ColorMode } from '@/components/providers/theme-provider';
+import { Avatar } from '@/components/ui/avatar';
 import { getAccessToken, getStoredUser, setSession, type AuthUser } from '@/lib/auth';
 import { fetchCurrentUser, updateProfile } from '@/lib/api';
 
@@ -34,20 +35,18 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!getAccessToken()) {
-      router.push('/login');
-      return;
-    }
+    if (!getAccessToken()) { router.push('/login'); return; }
     fetchCurrentUser()
-      .then((u) => setUser({ id: u.id, username: u.username, authProvider: u.authProvider, fullName: u.fullName, title: u.title }))
-      .catch(() => setUser(getStoredUser())) // fall back to whatever's cached locally if the fetch fails
+      .then((u) => setUser({
+        id: u.id, username: u.username, authProvider: u.authProvider,
+        fullName: u.fullName, title: u.title, email: u.email ?? undefined,
+        avatarUrl: u.avatarUrl, // THE FIX — was previously omitted entirely
+      }))
+      .catch(() => setUser(getStoredUser()))
       .finally(() => setLoading(false));
   }, [router]);
 
-  const filteredNav = useMemo(
-    () => NAV_ITEMS.filter((item) => item.label.toLowerCase().includes(search.toLowerCase())),
-    [search],
-  );
+  const filteredNav = useMemo(() => NAV_ITEMS.filter((item) => item.label.toLowerCase().includes(search.toLowerCase())), [search]);
 
   if (loading || !user) {
     return <div className="flex min-h-screen items-center justify-center text-sm text-muted">Loading settings…</div>;
@@ -55,42 +54,21 @@ export default function SettingsPage() {
 
   return (
     <div className="flex min-h-screen bg-background">
-      {/* Left settings nav — deliberately NOT the main app Sidebar; this
-          replaces the whole app shell per the reference, matching
-          figma-extraction §2.10 exactly. */}
       <aside className="flex w-[248px] shrink-0 flex-col border-r border-border bg-sidebar p-3">
         <button onClick={() => router.push('/tasks')} className="mb-3 flex items-center gap-1.5 rounded-lg px-2 py-2 text-sm text-secondary hover:bg-sidebar-active hover:text-foreground">
           <ArrowLeft size={14} /> Back to app
         </button>
-
         <div className="mb-2 flex items-center gap-2 rounded-lg border border-border bg-card px-2.5 py-1.5">
           <Search size={13} className="text-muted" />
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search"
-            className="w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted"
-          />
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search" className="w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted" />
         </div>
-
         <nav className="flex flex-col gap-0.5">
           {filteredNav.map((item) => {
             const Icon = item.icon;
             const active = section === item.key;
             return (
-              <button
-                key={item.key}
-                onClick={() => setSection(item.key)}
-                className={cn(
-                  'flex items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm font-medium',
-                  active ? 'bg-sidebar-active text-foreground' : 'text-secondary hover:bg-sidebar-active/60',
-                )}
-              >
-                {item.key === 'color' ? (
-                  <span className="h-3.5 w-3.5 rounded-sm bg-foreground" />
-                ) : (
-                  <Icon size={15} />
-                )}
+              <button key={item.key} onClick={() => setSection(item.key)} className={cn('flex items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm font-medium', active ? 'bg-sidebar-active text-foreground' : 'text-secondary hover:bg-sidebar-active/60')}>
+                {item.key === 'color' ? <span className="h-3.5 w-3.5 rounded-sm bg-foreground" /> : <Icon size={15} />}
                 {item.label}
               </button>
             );
@@ -110,25 +88,20 @@ export default function SettingsPage() {
   );
 }
 
-// ---------------------------------------------------------------------
-
 function ProfileSection({ user, onUserChange }: { user: AuthUser; onUserChange: (u: AuthUser) => void }) {
   const [fullName, setFullName] = useState(user.fullName ?? '');
   const [title, setTitle] = useState(user.title ?? '');
   const [username, setUsername] = useState(user.username);
-  const [avatarUrl, setAvatarUrl] = useState((user as any).avatarUrl ?? null);
+  const [avatarUrl, setAvatarUrl] = useState(user.avatarUrl ?? null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // revert: called on failure to snap the field back to server truth —
-  // THE fix for the username bug. A rejected value no longer lingers to
-  // silently re-fire on the next unrelated blur.
   async function persist(patch: { fullName?: string; title?: string; username?: string; avatarUrl?: string }, revert?: () => void) {
     setSaving(true);
     setError(null);
     try {
       const saved = await updateProfile(patch);
-      const nextUser: AuthUser = { ...user, username: saved.username, fullName: saved.fullName, title: saved.title };
+      const nextUser: AuthUser = { ...user, username: saved.username, fullName: saved.fullName, title: saved.title, avatarUrl: saved.avatarUrl };
       onUserChange(nextUser);
       setSession(localStorage.getItem('accessToken') ?? '', nextUser);
     } catch (err) {
@@ -146,7 +119,7 @@ function ProfileSection({ user, onUserChange }: { user: AuthUser; onUserChange: 
     reader.onload = () => {
       const dataUrl = reader.result as string;
       setAvatarUrl(dataUrl);
-      persist({ avatarUrl: dataUrl }, () => setAvatarUrl((user as any).avatarUrl ?? null));
+      persist({ avatarUrl: dataUrl }, () => setAvatarUrl(user.avatarUrl ?? null));
     };
     reader.readAsDataURL(file);
   }
@@ -154,81 +127,38 @@ function ProfileSection({ user, onUserChange }: { user: AuthUser; onUserChange: 
   return (
     <div>
       <h1 className="mb-6 text-2xl font-semibold text-foreground">Profile</h1>
-
       <div className="rounded-xl border border-border bg-card">
         <Row label="Profile picture">
           <label className="group relative cursor-pointer">
             <input type="file" accept="image/*" onChange={handleAvatarSelect} className="hidden" />
-            {avatarUrl ? (
-              <img src={avatarUrl} alt="" className="h-9 w-9 rounded-full object-cover" />
-            ) : (
-              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-accent text-sm font-medium text-white">
-                {user.username[0]?.toUpperCase() ?? '?'}
-              </div>
-            )}
+            <Avatar name={user.username} avatarUrl={avatarUrl} initials={user.username[0]?.toUpperCase() ?? '?'} size={36} />
             <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-cta-primary text-cta-primary-foreground opacity-0 transition-opacity group-hover:opacity-100">
               <Pencil size={9} />
             </span>
           </label>
         </Row>
-
         <Row label="Email">
           <div className="flex items-center gap-2">
             <span className="text-sm text-muted">{user.email ?? 'No email — connect Google to add one'}</span>
-            <button disabled title="Connect Google to add an email" className="text-muted opacity-40">
-              <Pencil size={13} />
-            </button>
+            <button disabled title="Connect Google to add an email" className="text-muted opacity-40"><Pencil size={13} /></button>
           </div>
         </Row>
-
         <Row label="Full name">
-          <input
-            value={fullName}
-            onChange={(e) => setFullName(e.target.value)}
-            onBlur={() => fullName !== (user.fullName ?? '') && persist({ fullName }, () => setFullName(user.fullName ?? ''))}
-            placeholder="Your full name"
-            className="w-56 rounded-lg bg-sidebar px-3 py-2 text-right text-sm text-foreground outline-none placeholder:text-muted"
-          />
+          <input value={fullName} onChange={(e) => setFullName(e.target.value)} onBlur={() => fullName !== (user.fullName ?? '') && persist({ fullName }, () => setFullName(user.fullName ?? ''))} placeholder="Your full name" className="w-56 rounded-lg bg-sidebar px-3 py-2 text-right text-sm text-foreground outline-none placeholder:text-muted" />
         </Row>
-
         <Row label="Title" hint="Your job title or role">
-          <input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            onBlur={() => title !== (user.title ?? '') && persist({ title }, () => setTitle(user.title ?? ''))}
-            placeholder="Designer"
-            className="w-56 rounded-lg bg-sidebar px-3 py-2 text-right text-sm text-foreground outline-none placeholder:text-muted"
-          />
+          <input value={title} onChange={(e) => setTitle(e.target.value)} onBlur={() => title !== (user.title ?? '') && persist({ title }, () => setTitle(user.title ?? ''))} placeholder="Designer" className="w-56 rounded-lg bg-sidebar px-3 py-2 text-right text-sm text-foreground outline-none placeholder:text-muted" />
         </Row>
-
         <Row label="Username" hint="One word, like a nickname or first name" last>
-          <input
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            onBlur={() => {
-              const trimmed = username.trim();
-              if (trimmed && trimmed !== user.username) {
-                persist({ username: trimmed }, () => setUsername(user.username)); // resets on 409 — no more stale re-fires
-              }
-            }}
-            className="w-56 rounded-lg bg-sidebar px-3 py-2 text-right text-sm text-foreground outline-none"
-          />
+          <input value={username} onChange={(e) => setUsername(e.target.value)} onBlur={() => { const trimmed = username.trim(); if (trimmed && trimmed !== user.username) persist({ username: trimmed }, () => setUsername(user.username)); }} className="w-56 rounded-lg bg-sidebar px-3 py-2 text-right text-sm text-foreground outline-none" />
         </Row>
       </div>
-
       {saving && <p className="mt-2 text-xs text-muted">Saving…</p>}
       {error && <p className="mt-2 text-xs text-destructive">{error}</p>}
-
       <h2 className="mb-2 mt-8 text-base font-semibold text-foreground">Workspace access</h2>
       <div className="flex items-center justify-between rounded-xl border border-border bg-card px-4 py-4">
         <p className="text-sm text-muted">Remove yourself from the workspace</p>
-        <button
-          disabled
-          title="No workspace membership to leave — this account isn't part of a multi-user workspace yet"
-          className="cursor-not-allowed rounded-full bg-date-overdue-bg px-4 py-1.5 text-sm font-medium text-date-overdue opacity-60"
-        >
-          Leave Workspace
-        </button>
+        <button disabled title="No workspace membership to leave — this account isn't part of a multi-user workspace yet" className="cursor-not-allowed rounded-full bg-date-overdue-bg px-4 py-1.5 text-sm font-medium text-date-overdue opacity-60">Leave Workspace</button>
       </div>
     </div>
   );
@@ -237,16 +167,11 @@ function ProfileSection({ user, onUserChange }: { user: AuthUser; onUserChange: 
 function Row({ label, hint, children, last }: { label: string; hint?: string; children: React.ReactNode; last?: boolean }) {
   return (
     <div className={cn('flex items-center justify-between px-5 py-4', !last && 'border-b border-border')}>
-      <div>
-        <p className="text-sm text-foreground">{label}</p>
-        {hint && <p className="text-xs text-muted">{hint}</p>}
-      </div>
+      <div><p className="text-sm text-foreground">{label}</p>{hint && <p className="text-xs text-muted">{hint}</p>}</div>
       {children}
     </div>
   );
 }
-
-// ---------------------------------------------------------------------
 
 function ThemeSection() {
   const { theme, setTheme } = useTheme();
@@ -254,18 +179,11 @@ function ThemeSection() {
     <div>
       <h1 className="mb-6 text-2xl font-semibold text-foreground">Theme</h1>
       <div className="rounded-xl border border-border bg-card p-2">
-        {[
-          { value: 'light', label: 'Light', icon: SunIcon },
-          { value: 'dark', label: 'Dark', icon: Moon },
-        ].map((opt) => {
+        {[{ value: 'light', label: 'Light', icon: SunIcon }, { value: 'dark', label: 'Dark', icon: Moon }].map((opt) => {
           const Icon = opt.icon;
           const active = theme === opt.value;
           return (
-            <button
-              key={opt.value}
-              onClick={() => setTheme(opt.value)}
-              className="flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-sm text-foreground hover:bg-sidebar-active"
-            >
+            <button key={opt.value} onClick={() => setTheme(opt.value)} className="flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-sm text-foreground hover:bg-sidebar-active">
               <span className="flex items-center gap-2"><Icon size={15} /> {opt.label}</span>
               {active && <Check size={15} className="text-accent" />}
             </button>
@@ -285,15 +203,8 @@ function ColorSection() {
         {COLOR_MODES.map((mode) => {
           const active = colorMode === mode.value;
           return (
-            <button
-              key={mode.value}
-              onClick={() => setColorMode(mode.value)}
-              className="flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-sm text-foreground hover:bg-sidebar-active"
-            >
-              <span className="flex items-center gap-2">
-                <span className="h-4 w-4 rounded-full border border-border" style={{ backgroundColor: mode.hex }} />
-                {mode.label}
-              </span>
+            <button key={mode.value} onClick={() => setColorMode(mode.value)} className="flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-sm text-foreground hover:bg-sidebar-active">
+              <span className="flex items-center gap-2"><span className="h-4 w-4 rounded-full border border-border" style={{ backgroundColor: mode.hex }} />{mode.label}</span>
               {active && <Check size={15} className="text-accent" />}
             </button>
           );

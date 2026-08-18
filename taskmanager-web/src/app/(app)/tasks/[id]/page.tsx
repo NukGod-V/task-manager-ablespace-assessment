@@ -18,6 +18,7 @@ import {
 import { STATUS_OPTIONS, PRIORITY_OPTIONS, priorityLeading } from '@/lib/task-options';
 import { PRIORITY_META } from '@/lib/task-meta';
 import type { MockTask, TaskPriority } from '@/types/task';
+import { Avatar } from '@/components/ui/avatar';
 
 interface LocalResource { id: string; name: string; url: string; }
 interface LocalSubtask { id: string; title: string; done: boolean; priority: TaskPriority; assigneeId: string | null; dueDate: string | null; }
@@ -350,7 +351,7 @@ export default function TaskDetailPage() {
               <div className="flex flex-wrap items-center gap-1.5">
                 {task.assignees.map((a) => (
                   <span key={a.id} className="flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1 text-xs text-foreground">
-                    <span className="flex h-4 w-4 items-center justify-center rounded-full bg-accent text-[8px] text-white">{a.initials}</span>
+                    <Avatar name={a.name} avatarUrl={a.avatarUrl} initials={a.initials} size={16} />
                     {a.name}
                   </span>
                 ))}
@@ -526,7 +527,7 @@ export default function TaskDetailPage() {
             <div className="flex flex-col gap-3">
               {comments.map((c) => (
                 <div key={c.id} className="flex gap-2">
-                  <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent text-[10px] text-white">{c.author[0]?.toUpperCase() ?? '?'}</div>
+                  <Avatar name={c.author} avatarUrl={c.authorAvatarUrl} initials={c.author[0]?.toUpperCase() ?? '?'} size={24} />
                   <div>
                     <p className="text-xs font-medium text-foreground">{c.author} <span className="font-normal text-muted">· {new Date(c.createdAt).toLocaleString()}</span></p>
                     <p className="text-sm text-secondary">{c.body}</p>
@@ -605,7 +606,10 @@ export default function TaskDetailPage() {
 
             <div className="flex items-center justify-between rounded-lg px-2 py-2 text-sm">
               <span className="text-secondary">Reporter</span>
-              <span className="text-foreground">{task.reporter?.name ?? '—'}</span>
+              <span className="flex items-center gap-1.5 text-foreground">
+                {task.reporter && <Avatar name={task.reporter.name} avatarUrl={task.reporter.avatarUrl} initials={task.reporter.initials} size={16} />}
+                {task.reporter?.name ?? '—'}
+              </span>
             </div>
           </div>
 

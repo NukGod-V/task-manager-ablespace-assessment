@@ -10,13 +10,8 @@ import { PRIORITY_META, STATUS_META } from '@/lib/task-meta';
 import { PriorityIcon } from '@/components/icons/priority-icon';
 import type { MockTask } from '@/types/task';
 import type { FieldVisibility } from '@/lib/task-fields';
+import { Avatar } from '@/components/ui/avatar';
 
-const AVATAR_GRADIENTS = ['from-violet-400 to-fuchsia-500', 'from-sky-400 to-blue-500', 'from-emerald-400 to-teal-500', 'from-amber-400 to-orange-500', 'from-rose-400 to-pink-500'];
-function gradientFor(name?: string | null) {
-  const safe = name && name.length > 0 ? name : '?';
-  const hash = safe.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
-  return AVATAR_GRADIENTS[hash % AVATAR_GRADIENTS.length];
-}
 // REVERTED — back to conditional overdue coloring, per your instruction.
 function isOverdue(dueDate: string | null) {
   if (!dueDate) return false;
@@ -96,9 +91,11 @@ export function TaskCard({ task, visibleFields, onOpen, onDelete, onDuplicate }:
               {showAssignees ? (
                 <div className="flex -space-x-1.5">
                   {task.assignees.slice(0, 3).map((a) => (
-                    <div key={a.id} title={a.name} className={cn('flex h-5 w-5 items-center justify-center rounded-full border-2 border-card bg-gradient-to-br text-[9px] font-medium text-white', gradientFor(a.name))}>{a.initials}</div>
+                      <Avatar key={a.id} name={a.name} avatarUrl={a.avatarUrl} initials={a.initials} size={20}
+                              className="border-2 border-card"/>
                   ))}
-                  {task.assignees.length > 3 && <div className="flex h-5 w-5 items-center justify-center rounded-full border-2 border-card bg-sidebar-active text-[8px] text-secondary">+{task.assignees.length - 3}</div>}
+                  {task.assignees.length > 3 && <div
+                      className="flex h-5 w-5 items-center justify-center rounded-full border-2 border-card bg-sidebar-active text-[8px] text-secondary">+{task.assignees.length - 3}</div>}
                 </div>
               ) : <span />}
               {showDueDate && task.dueDate && (

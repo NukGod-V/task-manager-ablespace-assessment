@@ -8,6 +8,7 @@ import { useSidebar } from './sidebar-context';
 import { getStoredUser, type AuthUser } from '@/lib/auth';
 import { useEffect, useRef, useState } from 'react';
 import { AccountMenu } from './account-menu';
+import { Avatar } from '@/components/ui/avatar'; // Added import
 
 const NAV_ITEMS = [
   { label: 'Tasks', href: '/tasks', icon: CheckSquare },
@@ -21,6 +22,7 @@ export function Sidebar() {
 
   const [mounted, setMounted] = useState(false);
   const [user, setUser] = useState<AuthUser | null>(null);
+
   useEffect(() => {
     setMounted(true);
     setUser(getStoredUser());
@@ -42,13 +44,16 @@ export function Sidebar() {
           onClick={() => setAccountMenuOpen((o) => !o)}
           className="flex w-full items-center gap-2 px-4 py-4 text-left hover:bg-sidebar-active"
         >
-          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent text-xs font-medium text-white">
-            {mounted && user?.username ? user.username[0].toUpperCase() : '?'}
-          </div>
+          <Avatar
+            name={user?.username}
+            avatarUrl={user?.avatarUrl}
+            initials={mounted && user?.username ? user.username[0].toUpperCase() : '?'}
+            size={28}
+          />
           <span className="flex-1 truncate text-sm font-medium text-foreground">
             {mounted && user?.username ? user.username : 'Loading…'}
           </span>
-          <ChevronDown size={16} className="text-muted shrink-0" />
+          <ChevronDown size={16} className="shrink-0 text-muted" />
         </button>
 
         {accountMenuOpen && (
