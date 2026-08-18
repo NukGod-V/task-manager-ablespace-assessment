@@ -62,22 +62,15 @@ export default function LoginPage() {
 
           {/* Now fully active-looking — hover state, no opacity/disabled */}
           <button
-            onClick={handleGoogleClick}
-            className="flex w-full items-center justify-center gap-2 rounded-full border border-border bg-card py-3 text-sm font-medium text-foreground transition-colors hover:bg-sidebar-active"
+              onClick={() => {
+                window.location.href = `${process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'}/auth/google`;
+              }}
+              className="flex w-full items-center justify-center gap-2 rounded-full border border-border bg-card py-3 text-sm font-medium text-foreground transition-colors hover:bg-sidebar-active"
           >
-            <GoogleIcon className="text-muted" />
+            <GoogleIcon className="text-muted"/>
             Login with Google
           </button>
         </div>
-
-        {error && (
-          <p className="mt-4 text-center text-xs text-destructive">{error}</p>
-        )}
-        {googleNotice && !error && (
-          <p className="mt-4 text-center text-xs text-muted">
-            Google login is coming soon — continue as a guest for now.
-          </p>
-        )}
       </div>
 
       <p className="mt-6 w-[384px] text-center text-xs text-muted">
