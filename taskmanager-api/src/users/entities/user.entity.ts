@@ -1,14 +1,8 @@
-import {
-  Entity,
-  PrimaryGeneratedColumn,
-  Column,
-  CreateDateColumn,
-  UpdateDateColumn,
-} from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn } from 'typeorm';
 
 export enum AuthProvider {
   GUEST = 'guest',
-  GOOGLE = 'google', // wired into schema now; Google OAuth flow comes in a later phase
+  GOOGLE = 'google',
 }
 
 @Entity('users')
@@ -19,12 +13,15 @@ export class User {
   @Column({ unique: true })
   username: string;
 
-  @Column({
-    type: 'enum',
-    enum: AuthProvider,
-    default: AuthProvider.GUEST,
-  })
+  @Column({ type: 'enum', enum: AuthProvider, default: AuthProvider.GUEST })
   authProvider: AuthProvider;
+
+  // FIXED: Added explicit type: 'varchar' so TypeORM doesn't crash on 'string | null'
+  @Column({ type: 'varchar', nullable: true })
+  fullName: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  title: string | null;
 
   @CreateDateColumn()
   createdAt: Date;

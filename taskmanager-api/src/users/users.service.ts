@@ -1,8 +1,9 @@
-import { Injectable } from '@nestjs/common';
+import { ConflictException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
 import { User, AuthProvider } from './entities/user.entity';
+import { UpdateProfileDto } from './dto/update-profile.dto';
 
 @Injectable()
 export class UsersService {
@@ -11,8 +12,6 @@ export class UsersService {
     private readonly userRepository: Repository<User>,
   ) {}
 
-  // Every guest needs *some* username to satisfy the entity/unique constraint,
-  // even though the person never typed one — generate a short, unique handle.
   async createGuest(): Promise<User> {
     const guest = this.userRepository.create({
       username: `guest_${uuidv4().slice(0, 8)}`,
@@ -24,9 +23,19 @@ export class UsersService {
   async findById(id: string): Promise<User | null> {
     return this.userRepository.findOneBy({ id });
   }
+
   async findAll(): Promise<User[]> {
-    // Powers the "add members" picker on Create Project — every guest user,
-    // no search/pagination. Fine at demo scale.
     return this.userRepository.find({ order: { createdAt: 'ASC' } });
+  }
+
+  async updateProfile(id: string, dto: UpdateProfileDto): Promise<User> {
+    if (dto.username) {
+      const existing = await this.userRepository.findOne({ where: { username: dto.username } });
+      if (existing && existing.id !== id) {
+        throw new ConflictException('That username is already taken');
+      }
+    }
+    await this.userRepository.update(id, dto);
+    return this.userRepository.findOneBy({ id }) as Promise<User>;
   }
 }
