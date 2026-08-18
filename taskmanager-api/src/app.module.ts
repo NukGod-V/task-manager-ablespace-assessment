@@ -22,20 +22,32 @@ import { CommentsModule } from './comments/comments.module';
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (config: ConfigService) => ({
-        type: 'postgres',
-        host: config.get<string>('DB_HOST'),
-        port: config.get<number>('DB_PORT'),
-        username: config.get<string>('DB_USERNAME'),
-        password: config.get<string>('DB_PASSWORD'),
-        database: config.get<string>('DB_NAME'),
-        ssl:
-          process.env.NODE_ENV === 'production'
-            ? { rejectUnauthorized: false }
-            : false,
-        autoLoadEntities: true, // picks up entities registered via forFeature() in each module
-        synchronize: true, // ⚠️ OK for assessment/dev; switch to migrations before "real" prod
-      }),
+      useFactory: (config: ConfigService) => {
+        const databaseUrl = config.get<string>('DATABASE_URL');
+        // Neon/Supabase/Render Postgres all hand you a single connection
+        // string — simpler and less error-prone than 5 separate host/port/
+        // user/password/name vars. Falls back to the original DB_* vars for
+        // local dev, which is unchanged from Phase 1.
+        if (databaseUrl) {
+          return {
+            type: 'postgres',
+            url: databaseUrl,
+            autoLoadEntities: true,
+            synchronize: true,
+            ssl: {rejectUnauthorized: false}, // required by cloud Postgres providers
+          };
+        }
+        return {
+          type: 'postgres',
+          host: config.get<string>('DB_HOST'),
+          port: config.get<number>('DB_PORT'),
+          username: config.get<string>('DB_USERNAME'),
+          password: config.get<string>('DB_PASSWORD'),
+          database: config.get<string>('DB_NAME'),
+          autoLoadEntities: true,
+          synchronize: true,
+        };
+      },
     }),
 
     UsersModule,

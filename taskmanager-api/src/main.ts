@@ -1,26 +1,21 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  const config = app.get(ConfigService);
 
-  // Strips unknown properties and auto-validates every incoming DTO
-  // against its class-validator decorators — this is what makes
-  // "strict validation" actually enforced at the framework level.
-  app.useGlobalPipes(
-    new ValidationPipe({
-      whitelist: true,
-      forbidNonWhitelisted: true,
-      transform: true,
-    }),
-  );
+  app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
 
-  // Next.js frontend will run on a different origin (localhost:3000 / vercel.app)
-  app.enableCors({
-    origin: true, // tighten to your actual frontend domain before submission
-    credentials: true,
-  });
+  // Reads from env now instead of hardcoded `origin: true` — supports a
+  // comma-separated list so both your production domain and localhost
+  // (for continued local testing) work simultaneously.
+  const allowedOrigins = (config.get<string>('CORS_ORIGIN') ?? config.get<string>('FRONTEND_URL') ?? 'http://localhost:3000')
+    .split(',')
+    .map((s) => s.trim());
+  app.enableCors({ origin: allowedOrigins, credentials: true });
 
   await app.listen(process.env.PORT ?? 4000);
 }
