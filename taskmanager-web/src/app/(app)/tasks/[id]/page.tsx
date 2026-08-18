@@ -48,7 +48,6 @@ export default function TaskDetailPage() {
   const [labels, setLabels] = useState<string[]>([]);
   const [labelInput, setLabelInput] = useState('');
 
-  // Persisted to task on change
   const [resources, setResources] = useState<LocalResource[]>([]);
   const [resourceName, setResourceName] = useState('');
   const [resourceUrl, setResourceUrl] = useState('');
@@ -147,7 +146,6 @@ export default function TaskDetailPage() {
     const next = has
       ? task.assignees.filter((a) => a.id !== userId).map((a) => a.id)
       : [...task.assignees.map((a) => a.id), userId];
-
     saveField({ assigneeIds: next });
     logActivity(has ? 'You removed an assignee' : 'You added an assignee');
   }
@@ -178,13 +176,28 @@ export default function TaskDetailPage() {
     logActivity(`You removed the "${label}" label`);
   }
 
+  // --- THE FIX: all five handlers below now call logActivity. They already
+  // persisted correctly (saveField was always being called) — they just
+  // never wrote an entry to the Updates panel. ---
+
   function addResource() {
-    if (!resourceName.trim() || !resourceUrl.trim()) return;
-    const next = [...resources, { id: crypto.randomUUID(), name: resourceName.trim(), url: resourceUrl.trim() }];
+    const name = resourceName.trim();
+    const url = resourceUrl.trim();
+    if (!name || !url) return;
+    const next = [...resources, { id: crypto.randomUUID(), name, url }];
     setResources(next);
     saveField({ resources: next });
+    logActivity(`You added the resource "${name}"`);
     setResourceName('');
     setResourceUrl('');
+  }
+
+  function removeResource(id: string) {
+    const removed = resources.find((r) => r.id === id);
+    const next = resources.filter((x) => x.id !== id);
+    setResources(next);
+    saveField({ resources: next });
+    logActivity(removed ? `You removed the resource "${removed.name}"` : 'You removed a resource');
   }
 
   function addSubtask() {
@@ -193,6 +206,7 @@ export default function TaskDetailPage() {
     const next = [...subtasks, { id: crypto.randomUUID(), title: val, done: false, priority: 'no_priority' as TaskPriority, assigneeId: null, dueDate: null }];
     setSubtasks(next);
     saveField({ subtasks: next });
+    logActivity(`You added the subtask "${val}"`);
     setSubtaskInput('');
   }
 
@@ -200,6 +214,18 @@ export default function TaskDetailPage() {
     const next = subtasks.map((s) => (s.id === id ? { ...s, ...patch } : s));
     setSubtasks(next);
     saveField({ subtasks: next });
+    if (patch.done !== undefined) logActivity(patch.done ? 'You completed a subtask' : 'You reopened a subtask');
+    else if (patch.priority !== undefined) logActivity("You changed a subtask's priority");
+    else if (patch.assigneeId !== undefined) logActivity("You changed a subtask's assignee");
+    else if (patch.dueDate !== undefined) logActivity("You changed a subtask's due date");
+  }
+
+  function removeSubtask(id: string) {
+    const removed = subtasks.find((s) => s.id === id);
+    const next = subtasks.filter((x) => x.id !== id);
+    setSubtasks(next);
+    saveField({ subtasks: next });
+    logActivity(removed ? `You removed the subtask "${removed.title}"` : 'You removed a subtask');
   }
 
   async function handleDuplicate() {
@@ -302,7 +328,6 @@ export default function TaskDetailPage() {
       </div>
 
       <div className="flex flex-1 gap-8 overflow-hidden">
-        {/* --- Left column --- */}
         <div className="flex-1 overflow-y-auto pb-8">
           <input
             value={title}
@@ -401,15 +426,7 @@ export default function TaskDetailPage() {
                   <Link2 size={13} className="shrink-0 text-muted" />
                   <a href={r.url} target="_blank" rel="noopener noreferrer" className="font-medium text-accent underline">{r.name}</a>
                   <span className="truncate text-xs text-muted">: {r.url}</span>
-                  <button
-                    onClick={() => {
-                      const next = resources.filter((x) => x.id !== r.id);
-                      setResources(next);
-                      saveField({ resources: next });
-                    }}
-                    className="text-muted opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
-                    aria-label="Remove resource"
-                  >
+                  <button onClick={() => removeResource(r.id)} className="text-muted opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100" aria-label="Remove resource">
                     <Trash2 size={13} />
                   </button>
                 </div>
@@ -490,15 +507,7 @@ export default function TaskDetailPage() {
                         </InlineQuickCell>
                       </span>
 
-                      <button
-                        onClick={() => {
-                          const next = subtasks.filter((x) => x.id !== s.id);
-                          setSubtasks(next);
-                          saveField({ subtasks: next });
-                        }}
-                        className="w-8 text-muted hover:text-destructive"
-                        aria-label="Remove subtask"
-                      >
+                      <button onClick={() => removeSubtask(s.id)} className="w-8 text-muted hover:text-destructive" aria-label="Remove subtask">
                         <Trash2 size={13} />
                       </button>
                     </div>
@@ -534,7 +543,6 @@ export default function TaskDetailPage() {
           </div>
         </div>
 
-        {/* --- Right column: Details --- */}
         <div className="w-[300px] shrink-0 overflow-y-auto">
           <div className="mb-3 flex items-center justify-between">
             <p className="text-sm font-medium text-secondary">Details</p>
