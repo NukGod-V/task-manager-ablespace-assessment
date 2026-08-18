@@ -8,6 +8,9 @@ import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { ProjectsModule } from '../projects/projects.module';
+import { GoogleStrategy } from './strategies/google.strategy'; // add to imports
+
+
 
 @Module({
   imports: [
@@ -26,6 +29,6 @@ import { ProjectsModule } from '../projects/projects.module';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy],
+  providers: [AuthService, JwtStrategy, GoogleStrategy],
 })
 export class AuthModule {}

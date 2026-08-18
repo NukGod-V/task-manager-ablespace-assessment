@@ -4,6 +4,8 @@ import { UsersService } from '../users/users.service';
 import { ProjectsService } from '../projects/projects.service';
 import { GuestLoginResponseDto } from './dto/guest-login-response.dto';
 
+interface GoogleProfile { email: string; fullName: string; avatarUrl: string | null; }
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -14,19 +16,21 @@ export class AuthService {
 
   async guestLogin(): Promise<GuestLoginResponseDto> {
     const user = await this.usersService.createGuest();
-
-    // Tasks now require a project, so a brand-new guest with zero projects
-    // would hit a dead end on their very first click otherwise.
     await this.projectsService.create({ name: 'My First Project' }, user);
+    return this.issueTokenFor(user.id, user.username, user.authProvider);
+  }
 
-    const accessToken = await this.jwtService.signAsync({
-      sub: user.id,
-      username: user.username,
-    });
+  async googleLogin(profile: GoogleProfile): Promise<GuestLoginResponseDto> {
+    let user = await this.usersService.findByEmail(profile.email);
+    if (!user) {
+      user = await this.usersService.createGoogleUser(profile);
+      await this.projectsService.create({ name: 'My First Project' }, user);
+    }
+    return this.issueTokenFor(user.id, user.username, user.authProvider);
+  }
 
-    return {
-      accessToken,
-      user: { id: user.id, username: user.username, authProvider: user.authProvider },
-    };
+  private async issueTokenFor(userId: string, username: string, authProvider: string): Promise<GuestLoginResponseDto> {
+    const accessToken = await this.jwtService.signAsync({ sub: userId, username });
+    return { accessToken, user: { id: userId, username, authProvider } };
   }
 }
