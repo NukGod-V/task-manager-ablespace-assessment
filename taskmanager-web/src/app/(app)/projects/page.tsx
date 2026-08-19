@@ -6,6 +6,7 @@ import { Plus, X, Users, Crown, UserPlus } from 'lucide-react';
 import { fetchProjects, createProject, fetchUsers, addProjectMember, removeProjectMember, type UiProject, type UiAppUser } from '@/lib/api';
 import { useActiveProject } from '@/components/providers/active-project-provider';
 import { getStoredUser, type AuthUser } from '@/lib/auth';
+import { Avatar } from '@/components/ui/avatar';
 
 export default function ProjectsPage() {
   const router = useRouter();
@@ -58,7 +59,9 @@ export default function ProjectsPage() {
               </div>
               <div className="flex -space-x-1.5">
                 {project.members.slice(0, 5).map((m) => (
-                  <div key={m.id} title={m.username ?? 'Unknown'} className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-card bg-accent text-[10px] text-white">{m.username?.[0]?.toUpperCase() ?? '?'}</div>
+                    <Avatar key={m.id} name={m.username} avatarUrl={m.avatarUrl}
+                            initials={m.username?.[0]?.toUpperCase() ?? '?'} size={24}
+                            className="border-2 border-card"/>
                 ))}
               </div>
             </div>

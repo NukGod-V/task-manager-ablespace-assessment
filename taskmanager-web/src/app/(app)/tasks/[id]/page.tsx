@@ -481,7 +481,7 @@ export default function TaskDetailPage() {
 
                       <span className="w-16">
                         <InlineQuickCell trigger={
-                          assignedMember ? <div className="flex h-5 w-5 items-center justify-center rounded-full bg-accent text-[9px] text-white">{assignedMember.initials}</div> : <div className="flex h-5 w-5 items-center justify-center rounded-full border border-dashed border-border text-muted"><Plus size={10} /></div>
+                          assignedMember ? <Avatar name={assignedMember.name} avatarUrl={assignedMember.avatarUrl} initials={assignedMember.initials} size={20} /> : <div className="flex h-5 w-5 items-center justify-center rounded-full border border-dashed border-border text-muted"><Plus size={10} /></div>
                         }>
                           {(close) => (
                             <>
