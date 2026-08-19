@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <style>
+    .bg { fill: #0A0A0A; }
+    .fg { fill: #FFFFFF; }
+    .ring { stroke: #E5E7EB; }
+    @media (prefers-color-scheme: dark) {
+      .bg { fill: #FFFFFF; }
+      .fg { fill: #0A0A0A; }
+      .ring { stroke: #27272A; }
+    }
+  </style>
+  <rect x="1" y="1" width="30" height="30" rx="9" class="bg ring" stroke-width="1.5" />
+  <g transform="translate(8,7) scale(0.85)">
+    <g transform="matrix(-1,0,0,1,16,0)">
+      <path class="fg" d="M0 5H3L3 16H5L5 5L8 5V4L4 0L0 4V5Z" />
+      <path class="fg" d="M16 16H10V14H16V16Z" />
+      <path class="fg" d="M10 12H14V10H10V12Z" />
+      <path class="fg" d="M12 8H10V6H12V8Z" />
+    </g>
+  </g>
+</svg>
