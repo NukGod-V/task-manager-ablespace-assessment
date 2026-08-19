@@ -19,6 +19,7 @@ import { STATUS_OPTIONS, PRIORITY_OPTIONS, priorityLeading } from '@/lib/task-op
 import { PRIORITY_META } from '@/lib/task-meta';
 import type { MockTask, TaskPriority } from '@/types/task';
 import { Avatar } from '@/components/ui/avatar';
+import { normalizeUrl } from '@/lib/utils';
 
 interface LocalResource { id: string; name: string; url: string; }
 interface LocalSubtask { id: string; title: string; done: boolean; priority: TaskPriority; assigneeId: string | null; dueDate: string | null; }
@@ -185,7 +186,7 @@ export default function TaskDetailPage() {
     const name = resourceName.trim();
     const url = resourceUrl.trim();
     if (!name || !url) return;
-    const next = [...resources, { id: crypto.randomUUID(), name, url }];
+    const next = [...resources, { id: crypto.randomUUID(), name, url: normalizeUrl(url) }];
     setResources(next);
     saveField({ resources: next });
     logActivity(`You added the resource "${name}"`);

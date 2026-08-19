@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { X, Tag, Plus, Trash2, Link2, MessageSquare, Check } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, normalizeUrl } from '@/lib/utils';
 import { SelectField } from '@/components/ui/select-field';
 import { InlineQuickCell } from './inline-quick-cell';
 import { useTaskActions } from '@/components/layout/task-actions-context';
@@ -84,7 +84,7 @@ export function AddTaskPanel({ defaultStatus, onClose }: AddTaskPanelProps) {
 
   function addResource() {
     if (!resourceName.trim() || !resourceUrl.trim()) return;
-    setResources((prev) => [...prev, { id: crypto.randomUUID(), name: resourceName.trim(), url: resourceUrl.trim() }]);
+    setResources((prev) => [...prev, { id: crypto.randomUUID(), name: resourceName.trim(), url: normalizeUrl(resourceUrl) }]);
     setResourceName('');
     setResourceUrl('');
   }
