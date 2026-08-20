@@ -16,10 +16,10 @@ import { PRIORITY_META, STATUS_META } from '@/lib/task-meta';
 import { PRIORITY_OPTIONS, priorityLeading } from '@/lib/task-options';
 import { PriorityIcon } from '@/components/icons/priority-icon';
 import { InlineQuickCell } from './inline-quick-cell';
+import { Avatar } from '@/components/ui/avatar';
 import type { KanbanColumn, MockTask, TaskStatus, TaskPriority } from '@/types/task';
 import type { FieldVisibility } from '@/lib/task-fields';
 import type { UpdateTaskInput } from '@/lib/api';
-import { Avatar } from '@/components/ui/avatar';
 
 interface ProjectMember { id: string; username: string; }
 
@@ -47,7 +47,7 @@ function formatDate(dueDate: string) {
 
 export function TaskListView({
   columns, tasks, visibleFields, projectMembers, setTasks,
-  onOpenTask, onDeleteTask, onAddTask, onUpdateTask, onTaskReordered, onDuplicateTask // <-- ADD IT HERE
+  onOpenTask, onDeleteTask, onAddTask, onUpdateTask, onTaskReordered, onDuplicateTask,
 }: TaskListViewProps) {
   const [collapsedGroups, setCollapsedGroups] = useState<string[]>([]);
   function toggleGroup(id: string) {
@@ -59,10 +59,6 @@ export function TaskListView({
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
-  // THE FIX for cross-column drag: live-reparent the dragged task's status
-  // while hovering, same pattern Board already uses. Without this, dropping
-  // in a different group had nothing to reconcile — the task's status
-  // never actually changed.
   function handleDragOver(event: DragOverEvent) {
     const { active, over } = event;
     if (!over) return;
@@ -125,7 +121,7 @@ export function TaskListView({
             onDeleteTask={onDeleteTask}
             onAddTask={() => onAddTask(column.id)}
             onUpdateTask={onUpdateTask}
-            onDuplicateTask={onDuplicateTask} // <-- ADD THIS LINE
+            onDuplicateTask={onDuplicateTask}
           />
         ))}
       </div>
@@ -135,7 +131,7 @@ export function TaskListView({
 
 function TaskGroup({
   column, tasks, visibleFields, projectMembers, collapsed, onToggle,
-  onOpenTask, onDeleteTask, onAddTask, onUpdateTask, onDuplicateTask, // <-- ADD IT HERE
+  onOpenTask, onDeleteTask, onAddTask, onUpdateTask, onDuplicateTask,
 }: {
   column: KanbanColumn;
   tasks: MockTask[];
@@ -149,8 +145,6 @@ function TaskGroup({
   onUpdateTask: (taskId: string, patch: UpdateTaskInput) => void;
   onDuplicateTask: (id: string) => void;
 }) {
-  // Droppable zone so a group with ZERO tasks can still receive a drop —
-  // without this, dropping into an empty group had no target to hit.
   const { setNodeRef: setDropRef } = useDroppable({
     id: `${column.id}-list-dropzone`,
     data: { type: 'column-drop-area', status: column.id },
@@ -165,8 +159,6 @@ function TaskGroup({
       </button>
 
       {!collapsed && (
-        // overflow-hidden REMOVED (was clipping popovers) — rounding now
-        // applied directly to the header and the trailing button instead.
         <div className="rounded-xl border border-border">
           <div className="flex items-center gap-3 rounded-t-xl border-b border-border bg-sidebar px-4 py-2.5 text-[13px] font-medium text-secondary">
             <span className="w-5" />
@@ -215,7 +207,7 @@ function TaskRow({
   onOpen: () => void;
   onDelete: () => void;
   onUpdate: (patch: UpdateTaskInput) => void;
-  onDuplicate: () => void; // Fixed prop type
+  onDuplicate: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: task.id,
@@ -256,24 +248,50 @@ function TaskRow({
         </span>
       )}
 
-      {/* NEW Multi-Assignee Block */}
+      {/* RESTORED — this whole block was missing */}
+      {visibleFields.Priority && (
+        <span className="w-28">
+          <InlineQuickCell
+            widthClass="w-40"
+            trigger={
+              task.priority !== 'no_priority' ? (
+                <span className={cn('flex items-center gap-1', priority.textColor)}>
+                  <PriorityIcon level={priority.level} colorClass={priority.textColor} size={12} />
+                  {priority.label}
+                </span>
+              ) : (
+                <span className="flex items-center gap-1 text-xs text-muted"><Plus size={12} /> Priority</span>
+              )
+            }
+          >
+            {(close) => (
+              <>
+                {PRIORITY_OPTIONS.map((opt) => (
+                  <button key={opt.value} onClick={() => { onUpdate({ priority: opt.value as TaskPriority }); close(); }} className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-foreground hover:bg-sidebar-active">
+                    {priorityLeading(opt)}
+                    <span className="flex-1 text-left">{opt.label}</span>
+                    {task.priority === opt.value && <Check size={13} className="text-accent" />}
+                  </button>
+                ))}
+              </>
+            )}
+          </InlineQuickCell>
+        </span>
+      )}
+
       {visibleFields.Members && (
         <span className="w-20">
           <InlineQuickCell
             trigger={
               task.assignees.length > 0 ? (
-                  <div className="flex -space-x-1">
-                    {task.assignees.slice(0, 2).map((a) => (
-                        <Avatar key={a.id} name={a.name} avatarUrl={a.avatarUrl} initials={a.initials} size={24}
-                                className="border-2 border-card"/>
-                    ))}
-                    {task.assignees.length > 2 && <div
-                        className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-card bg-sidebar-active text-[9px] text-secondary">+{task.assignees.length - 2}</div>}
-                  </div>
+                <div className="flex -space-x-1">
+                  {task.assignees.slice(0, 2).map((a) => (
+                    <Avatar key={a.id} name={a.name} avatarUrl={a.avatarUrl} initials={a.initials} size={24} className="border-2 border-card" />
+                  ))}
+                  {task.assignees.length > 2 && <div className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-card bg-sidebar-active text-[9px] text-secondary">+{task.assignees.length - 2}</div>}
+                </div>
               ) : (
-                  <div
-                      className="flex h-6 w-6 items-center justify-center rounded-full border border-dashed border-border text-muted">
-                    <Plus size={12}/></div>
+                <div className="flex h-6 w-6 items-center justify-center rounded-full border border-dashed border-border text-muted"><Plus size={12} /></div>
               )
             }
           >
@@ -300,7 +318,6 @@ function TaskRow({
           </InlineQuickCell>
         </span>
       )}
-      {/* OLD block deleted from here */}
 
       {visibleFields['Due Date'] && (
         <span className="w-32">
