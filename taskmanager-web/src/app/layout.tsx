@@ -3,7 +3,7 @@ import './globals.css';
 import { ThemeProvider, ColorModeProvider } from '@/components/providers/theme-provider';
 
 export const metadata: Metadata = {
-  title: 'Pyramid — Task Management',
+  title: 'ClearStep | Task Management',
   description: 'Task Management System built for the AbleSpace assessment',
 };
 
